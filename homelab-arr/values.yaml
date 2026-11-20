@@ -60,8 +60,8 @@ jellyfin:
 jellyseerr:
   enabled: true
   image:
-    repository: fallenbagel/jellyseerr
-    tag: latest
+    repository: ghcr.io/seerr-team/seerr
+    tag: v3.5.2
     pullPolicy: IfNotPresent
   replicaCount: 1
   service:

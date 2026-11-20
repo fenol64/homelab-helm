@@ -1,4 +1,4 @@
-# Example values for a 12 GiB Talos node (lean ARR + Jellyseerr)
+# Values for the fenol-homelab Talos node (~12 GiB RAM, ~205 GiB livres em /opt).
 # Usage:
 #   helm upgrade --install media ./homelab-arr -n media --create-namespace -f values-homelab.yaml
 
@@ -9,17 +9,20 @@ namespace:
 timezone: America/Sao_Paulo
 
 storage:
-  # REQUIRED: set to a StorageClass available on your Talos cluster
+  # local-path não impõe cota: o tamanho é o teto prático no disco do nó.
   storageClassName: local-path
   media:
     enabled: true
-    size: 500Gi
+    size: 120Gi
   downloads:
     enabled: true
-    size: 100Gi
+    size: 40Gi
 
+# Traefik (IngressClass traefik) publicado na porta 80 do nó.
+# sslip.io resolve <nome>.192.168.0.42.sslip.io para 192.168.0.42, sem DNS local.
 ingress:
-  enabled: false
+  enabled: true
+  className: traefik
 
 jellyfin:
   enabled: true
@@ -31,6 +34,8 @@ jellyfin:
     limits:
       cpu: "2"
       memory: 1536Mi
+  ingress:
+    host: jellyfin.192.168.0.42.sslip.io
 
 jellyseerr:
   enabled: true
@@ -39,6 +44,8 @@ jellyseerr:
       memory: 128Mi
     limits:
       memory: 384Mi
+  ingress:
+    host: seerr.192.168.0.42.sslip.io
 
 radarr:
   enabled: true
@@ -47,6 +54,8 @@ radarr:
       memory: 256Mi
     limits:
       memory: 512Mi
+  ingress:
+    host: radarr.192.168.0.42.sslip.io
 
 sonarr:
   enabled: true
@@ -55,6 +64,8 @@ sonarr:
       memory: 256Mi
     limits:
       memory: 512Mi
+  ingress:
+    host: sonarr.192.168.0.42.sslip.io
 
 prowlarr:
   enabled: true
@@ -63,6 +74,8 @@ prowlarr:
       memory: 128Mi
     limits:
       memory: 384Mi
+  ingress:
+    host: prowlarr.192.168.0.42.sslip.io
 
 qbittorrent:
   enabled: true
@@ -71,6 +84,7 @@ qbittorrent:
       memory: 256Mi
     limits:
       memory: 768Mi
-  # Expose BT port on the node if you want better swarm connectivity
   service:
     bittorrentServiceType: NodePort
+  ingress:
+    host: qbit.192.168.0.42.sslip.io
