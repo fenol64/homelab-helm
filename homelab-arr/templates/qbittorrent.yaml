@@ -1,0 +1,158 @@
+{{- if .Values.qbittorrent.enabled }}
+{{- $component := "qbittorrent" }}
+{{- $app := .Values.qbittorrent }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "homelab-arr.configPvcName" (dict "root" . "component" $component) }}
+  namespace: {{ include "homelab-arr.namespace" . }}
+  labels:
+    {{- include "homelab-arr.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $app.config.size }}
+  {{- if .Values.storage.storageClassName }}
+  storageClassName: {{ .Values.storage.storageClassName | quote }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "homelab-arr.fullname" . }}-{{ $component }}
+  namespace: {{ include "homelab-arr.namespace" . }}
+  labels:
+    {{- include "homelab-arr.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  replicas: {{ $app.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "homelab-arr.componentSelectorLabels" (dict "root" . "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "homelab-arr.componentSelectorLabels" (dict "root" . "component" $component) | nindent 8 }}
+    spec:
+      securityContext:
+        fsGroup: {{ .Values.pgid }}
+      containers:
+        - name: qbittorrent
+          image: "{{ $app.image.repository }}:{{ $app.image.tag }}"
+          imagePullPolicy: {{ $app.image.pullPolicy }}
+          env:
+            {{- include "homelab-arr.linuxserverEnv" . | nindent 12 }}
+            - name: WEBUI_PORT
+              value: {{ $app.service.webPort | quote }}
+          ports:
+            - name: http
+              containerPort: {{ $app.service.webPort }}
+              protocol: TCP
+            - name: bittorrent-tcp
+              containerPort: {{ $app.service.bittorrentPort }}
+              protocol: TCP
+            - name: bittorrent-udp
+              containerPort: {{ $app.service.bittorrentPort }}
+              protocol: UDP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: downloads
+              mountPath: /downloads
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ include "homelab-arr.configPvcName" (dict "root" . "component" $component) }}
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: {{ include "homelab-arr.downloadsPvcName" . }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "homelab-arr.fullname" . }}-{{ $component }}
+  namespace: {{ include "homelab-arr.namespace" . }}
+  labels:
+    {{- include "homelab-arr.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  type: {{ $app.service.type }}
+  ports:
+    - port: {{ $app.service.webPort }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "homelab-arr.componentSelectorLabels" (dict "root" . "component" $component) | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "homelab-arr.fullname" . }}-{{ $component }}-bt
+  namespace: {{ include "homelab-arr.namespace" . }}
+  labels:
+    {{- include "homelab-arr.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  type: {{ $app.service.bittorrentServiceType }}
+  ports:
+    - port: {{ $app.service.bittorrentPort }}
+      targetPort: bittorrent-tcp
+      protocol: TCP
+      name: bittorrent-tcp
+    - port: {{ $app.service.bittorrentPort }}
+      targetPort: bittorrent-udp
+      protocol: UDP
+      name: bittorrent-udp
+  selector:
+    {{- include "homelab-arr.componentSelectorLabels" (dict "root" . "component" $component) | nindent 4 }}
+{{- if or .Values.ingress.enabled $app.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "homelab-arr.fullname" . }}-{{ $component }}
+  namespace: {{ include "homelab-arr.namespace" . }}
+  labels:
+    {{- include "homelab-arr.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if $app.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ $app.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tlsSecretName | default (printf "%s-%s-tls" (include "homelab-arr.fullname" .) $component) }}
+  {{- end }}
+  rules:
+    - host: {{ $app.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ $app.ingress.path | default "/" }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "homelab-arr.fullname" . }}-{{ $component }}
+                port:
+                  name: http
+{{- end }}
+{{- end }}

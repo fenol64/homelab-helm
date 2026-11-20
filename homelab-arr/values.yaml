@@ -1,0 +1,186 @@
+# Global settings
+nameOverride: ""
+fullnameOverride: ""
+
+namespace:
+  create: true
+  name: media
+
+timezone: America/Sao_Paulo
+puid: 1000
+pgid: 1000
+
+# Shared media / download volumes
+storage:
+  storageClassName: "" # set to your Talos StorageClass (e.g. local-path, longhorn)
+  media:
+    enabled: true
+    size: 500Gi
+    accessMode: ReadWriteOnce
+    # existingClaim: ""  # use an existing PVC instead
+  downloads:
+    enabled: true
+    size: 100Gi
+    accessMode: ReadWriteOnce
+    # existingClaim: ""
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # tlsSecretName: media-tls
+
+jellyfin:
+  enabled: true
+  image:
+    repository: lscr.io/linuxserver/jellyfin
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8096
+  config:
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1536Mi
+  # GeForce 520 has no useful NVENC — keep HW accel off
+  hardwareAcceleration: false
+  ingress:
+    enabled: false
+    host: jellyfin.home.arpa
+    path: /
+    tls: false
+
+jellyseerr:
+  enabled: true
+  image:
+    repository: fallenbagel/jellyseerr
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 5055
+  config:
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+  ingress:
+    enabled: false
+    host: seerr.home.arpa
+    path: /
+    tls: false
+
+radarr:
+  enabled: true
+  image:
+    repository: lscr.io/linuxserver/radarr
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 7878
+  config:
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  ingress:
+    enabled: false
+    host: radarr.home.arpa
+    path: /
+    tls: false
+
+sonarr:
+  enabled: true
+  image:
+    repository: lscr.io/linuxserver/sonarr
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8989
+  config:
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  ingress:
+    enabled: false
+    host: sonarr.home.arpa
+    path: /
+    tls: false
+
+prowlarr:
+  enabled: true
+  image:
+    repository: lscr.io/linuxserver/prowlarr
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 9696
+  config:
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+  ingress:
+    enabled: false
+    host: prowlarr.home.arpa
+    path: /
+    tls: false
+
+qbittorrent:
+  enabled: true
+  image:
+    repository: lscr.io/linuxserver/qbittorrent
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    webPort: 8080
+    # BitTorrent port — use NodePort or MetalLB LoadBalancer on Talos if you want external peers
+    bittorrentPort: 6881
+    bittorrentServiceType: ClusterIP
+  config:
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 768Mi
+  ingress:
+    enabled: false
+    host: qbittorrent.home.arpa
+    path: /
+    tls: false

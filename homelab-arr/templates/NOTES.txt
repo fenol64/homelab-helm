@@ -1,0 +1,30 @@
+homelab-arr instalado no namespace {{ include "homelab-arr.namespace" . }}.
+
+Apps habilitados:
+{{- if .Values.jellyfin.enabled }}
+  - Jellyfin:     kubectl -n {{ include "homelab-arr.namespace" . }} port-forward svc/{{ include "homelab-arr.fullname" . }}-jellyfin 8096:8096
+{{- end }}
+{{- if .Values.jellyseerr.enabled }}
+  - Jellyseerr:   kubectl -n {{ include "homelab-arr.namespace" . }} port-forward svc/{{ include "homelab-arr.fullname" . }}-jellyseerr 5055:5055
+{{- end }}
+{{- if .Values.radarr.enabled }}
+  - Radarr:       kubectl -n {{ include "homelab-arr.namespace" . }} port-forward svc/{{ include "homelab-arr.fullname" . }}-radarr 7878:7878
+{{- end }}
+{{- if .Values.sonarr.enabled }}
+  - Sonarr:       kubectl -n {{ include "homelab-arr.namespace" . }} port-forward svc/{{ include "homelab-arr.fullname" . }}-sonarr 8989:8989
+{{- end }}
+{{- if .Values.prowlarr.enabled }}
+  - Prowlarr:     kubectl -n {{ include "homelab-arr.namespace" . }} port-forward svc/{{ include "homelab-arr.fullname" . }}-prowlarr 9696:9696
+{{- end }}
+{{- if .Values.qbittorrent.enabled }}
+  - qBittorrent:  kubectl -n {{ include "homelab-arr.namespace" . }} port-forward svc/{{ include "homelab-arr.fullname" . }}-qbittorrent 8080:8080
+{{- end }}
+
+Setup rápido (ordem sugerida):
+  1. qBittorrent — defina senha da WebUI e pasta /downloads
+  2. Prowlarr — adicione indexers e sincronize com Radarr/Sonarr
+  3. Radarr/Sonarr — root folders /media/movies e /media/tv + download client qBittorrent
+  4. Jellyfin — bibliotecas em /media/movies e /media/tv
+  5. Jellyseerr — conecte Jellyfin + Radarr + Sonarr (aí você pesquisa e pede filmes)
+
+GeForce 520: sem aceleração de hardware. Prefira direct play / remux.

@@ -1,0 +1,40 @@
+{{- if and .Values.storage.media.enabled (not .Values.storage.media.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "homelab-arr.mediaPvcName" . }}
+  namespace: {{ include "homelab-arr.namespace" . }}
+  labels:
+    {{- include "homelab-arr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: media-storage
+spec:
+  accessModes:
+    - {{ .Values.storage.media.accessMode | default "ReadWriteOnce" }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.media.size }}
+  {{- if .Values.storage.storageClassName }}
+  storageClassName: {{ .Values.storage.storageClassName | quote }}
+  {{- end }}
+{{- end }}
+{{- if and .Values.storage.downloads.enabled (not .Values.storage.downloads.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "homelab-arr.downloadsPvcName" . }}
+  namespace: {{ include "homelab-arr.namespace" . }}
+  labels:
+    {{- include "homelab-arr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: downloads-storage
+spec:
+  accessModes:
+    - {{ .Values.storage.downloads.accessMode | default "ReadWriteOnce" }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.downloads.size }}
+  {{- if .Values.storage.storageClassName }}
+  storageClassName: {{ .Values.storage.storageClassName | quote }}
+  {{- end }}
+{{- end }}

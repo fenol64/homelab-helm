@@ -1,0 +1,76 @@
+# Example values for a 12 GiB Talos node (lean ARR + Jellyseerr)
+# Usage:
+#   helm upgrade --install media ./homelab-arr -n media --create-namespace -f values-homelab.yaml
+
+namespace:
+  create: true
+  name: media
+
+timezone: America/Sao_Paulo
+
+storage:
+  # REQUIRED: set to a StorageClass available on your Talos cluster
+  storageClassName: local-path
+  media:
+    enabled: true
+    size: 500Gi
+  downloads:
+    enabled: true
+    size: 100Gi
+
+ingress:
+  enabled: false
+
+jellyfin:
+  enabled: true
+  hardwareAcceleration: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1536Mi
+
+jellyseerr:
+  enabled: true
+  resources:
+    requests:
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+
+radarr:
+  enabled: true
+  resources:
+    requests:
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+sonarr:
+  enabled: true
+  resources:
+    requests:
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+prowlarr:
+  enabled: true
+  resources:
+    requests:
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+
+qbittorrent:
+  enabled: true
+  resources:
+    requests:
+      memory: 256Mi
+    limits:
+      memory: 768Mi
+  # Expose BT port on the node if you want better swarm connectivity
+  service:
+    bittorrentServiceType: NodePort

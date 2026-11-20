@@ -1,0 +1,18 @@
+apiVersion: v2
+name: homelab-arr
+description: Lean ARR streaming stack for Talos homelab (Jellyfin + Jellyseerr + Radarr + Sonarr + Prowlarr + qBittorrent)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - arr
+  - jellyfin
+  - jellyseerr
+  - radarr
+  - sonarr
+  - prowlarr
+  - qbittorrent
+  - homelab
+  - talos
+maintainers:
+  - name: homelab
