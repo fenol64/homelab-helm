@@ -151,17 +151,22 @@ spec:
               path: /
               port: http
             periodSeconds: 10
+            timeoutSeconds: 5
             failureThreshold: 60
           readinessProbe:
             httpGet:
               path: /
               port: http
             periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
           livenessProbe:
             httpGet:
               path: /
               port: http
             periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 8
       volumes:
         - name: data
           persistentVolumeClaim:

@@ -212,7 +212,7 @@ Requests cabem no nó. A soma dos limits passa de 12 GiB: um pico junto de Jelly
 | Immich server | 384 Mi | 1.5 Gi |
 | Immich ML | 512 Mi | 2 Gi |
 | Postgres do Immich | 256 Mi | 1 Gi |
-| Seafile | 256 Mi | 768 Mi |
+| Seafile | 512 Mi | 2 Gi |
 | MariaDB | 256 Mi | 768 Mi |
 | n8n | 256 Mi | 1 Gi |
 | SearXNG | 256 Mi | 512 Mi |

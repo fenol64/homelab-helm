@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -17,6 +18,8 @@ from sync import (
     DriveItem,
     Plan,
     QuotaExceeded,
+    SeafileClient,
+    SeafileUnavailable,
     SkipFile,
     Upload,
     UploadRejected,
@@ -29,6 +32,7 @@ from sync import (
     load_state,
     normalize_upload_url,
     sanitize_filename,
+    seafile_relative_path,
     state_key,
 )
 
@@ -169,6 +173,11 @@ class PlanTest(unittest.TestCase):
         plan = build_plan(items, "REAL", ["backup ssd"], {})
         self.assertEqual([upload.path for upload in plan.uploads], ["/mesmo.txt", "/mesmo (2).txt"])
 
+    def test_relative_path_follows_the_seafile_upload(self) -> None:
+        self.assertEqual(seafile_relative_path("/"), "")
+        self.assertEqual(seafile_relative_path("/Documentos"), "Documentos")
+        self.assertEqual(seafile_relative_path("/Documentos/sub/"), "Documentos/sub")
+
     def test_names(self) -> None:
         self.assertEqual(destination_filename("nota", DOC), "nota.docx")
         self.assertEqual(destination_filename("nota.DOCX", DOC), "nota.DOCX")
@@ -288,6 +297,73 @@ class ExecuteTest(unittest.TestCase):
             with self.assertRaises(QuotaExceeded):
                 execute(plan, state, download, upload, workdir=Path(directory))
         self.assertIn(state_key("1", "/a.txt"), state["files"])
+
+    def test_unavailable_stops_before_the_next_file(self) -> None:
+        first = Upload("1", "/a.txt", "a.txt", "/", None, "t", 1, None)
+        second = Upload("2", "/b.txt", "b.txt", "/", None, "t", 1, None)
+        plan = Plan(uploads=[first, second])
+        state: dict = {"files": {}}
+
+        def download(action: Upload, dest: Path) -> None:
+            dest.write_bytes(b"a")
+
+        def upload(action: Upload, dest: Path) -> None:
+            raise SeafileUnavailable("502 Bad Gateway")
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(SeafileUnavailable):
+                execute(plan, state, download, upload, workdir=Path(directory))
+        self.assertEqual(state["files"], {})
+
+
+class UploadLinkTest(unittest.TestCase):
+    def _client(self, codes: list[int]) -> tuple[SeafileClient, list[int]]:
+        client = SeafileClient.__new__(SeafileClient)
+        client._requests = type("Requests", (), {"RequestException": Exception})
+        client.base = "https://drive.example"
+        client.repo_id = "repo"
+        client._listings = {}
+        client._upload_links = {}
+        seen: list[int] = []
+
+        class Response:
+            def __init__(self, status: int) -> None:
+                self.status_code = status
+                self.reason = "Bad Gateway" if status == 502 else "OK"
+                self.url = "https://drive.example/api2/repos/repo/upload-link/?p=%2F"
+                self.headers = {"content-type": "application/json"}
+                self.text = '"http://127.0.0.1:8082/upload-api/abc"'
+
+            def json(self) -> str:
+                return "http://127.0.0.1:8082/upload-api/abc"
+
+            def raise_for_status(self) -> None:
+                if self.status_code >= 400:
+                    raise AssertionError(self.status_code)
+
+        class Session:
+            def get(self, url: str, params: dict | None = None, timeout: object = None) -> Response:
+                seen.append(codes.pop(0))
+                return Response(seen[-1])
+
+        client.session = Session()
+        return client, seen
+
+    def test_bad_gateway_is_retried_and_the_link_is_reused(self) -> None:
+        client, seen = self._client([502, 502, 200])
+        with patch("sync.time.sleep"):
+            link = client._upload_link("/")
+            again = client._upload_link("/")
+        self.assertEqual(seen, [502, 502, 200])
+        self.assertEqual(link, "https://drive.example/seafhttp/upload-api/abc")
+        self.assertEqual(again, link)
+
+    def test_bad_gateway_stops_after_the_retries(self) -> None:
+        client, seen = self._client([502, 502, 502, 502, 502, 502])
+        with patch("sync.time.sleep"):
+            with self.assertRaises(SeafileUnavailable):
+                client._upload_link("/")
+        self.assertEqual(len(seen), 6)
 
 
 if __name__ == "__main__":

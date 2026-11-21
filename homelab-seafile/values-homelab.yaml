@@ -25,9 +25,9 @@ server:
     password: 50a0451d5412d5e20da8b40a
   resources:
     requests:
-      memory: 256Mi
+      memory: 512Mi
     limits:
-      memory: 768Mi
+      memory: 2Gi
   ingress:
     host: drive.192.168.0.42.sslip.io
   tailscale:

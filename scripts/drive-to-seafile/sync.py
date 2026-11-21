@@ -27,6 +27,8 @@ Seafile, por variável de ambiente ou flag:
   SEAFILE_TOKEN     no lugar da senha, se você já tem um token da API
   SEAFILE_REPO      padrão "Google Drive". A biblioteca é criada se faltar.
 
+A biblioteca repete as pastas do Drive. O envio usa o parent_dir "/" e o
+relative_path do Seafile: a pasta que faltar é criada nesse envio.
 Documentos, planilhas, apresentações e desenhos do Google viram
 docx, xlsx, pptx e png. O Drive recusa exportar acima de 10 MB.
 Formulário, site e mapa não têm arquivo e são ignorados.
@@ -41,6 +43,7 @@ import json
 import os
 import sys
 import time
+import unicodedata
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -95,8 +98,21 @@ class QuotaExceeded(SeafileError):
     pass
 
 
+class SeafileUnavailable(SeafileError):
+    """502, 503 ou 504 depois das tentativas. O drive ou o proxy caiu."""
+
+
 class UploadRejected(SeafileError):
     pass
+
+
+# O proxy devolve isso quando o Seafile reinicia ou não responde.
+GATEWAY_STATUS = {429, 502, 503, 504}
+
+
+def _pause(delay: float, message: str) -> None:
+    print(message, file=sys.stderr)
+    time.sleep(delay)
 
 
 class SkipFile(Exception):
@@ -164,6 +180,8 @@ def is_excluded_name(name: str, exclude_names: list[str]) -> bool:
 
 
 def sanitize_filename(name: str) -> str:
+    # O Seafile grava o nome em NFC. Sem isso, o mesmo acento vira duas pastas.
+    name = unicodedata.normalize("NFC", name)
     cleaned = []
     for char in name:
         if char in '/\\:*?"<>|' or not char.isprintable():
@@ -212,12 +230,16 @@ def split_parent(path: str) -> tuple[str, str]:
     return parent, name
 
 
-def parent_dir_form(path: str) -> str:
-    """Diretório no formato que o upload do Seafile espera, com barra no fim."""
-    directory = api_path(path)
+def seafile_relative_path(parent_dir: str) -> str:
+    """Subpasta do relative_path. Sem barra no começo; vazio na raiz.
+
+    O link de upload fica preso à raiz. O relative_path leva o arquivo
+    para a pasta do Drive e o Seafile cria o que ainda não existe.
+    """
+    directory = api_path(parent_dir)
     if directory == "/":
-        return "/"
-    return directory + "/"
+        return ""
+    return directory[1:]
 
 
 def state_key(drive_id: str, path: str) -> str:
@@ -538,7 +560,7 @@ def execute(
 ) -> dict[str, int]:
     """Baixa e envia. `download(upload, dest)` e `upload(upload, dest)` são
     injetados para o teste não falar com a rede. Um arquivo com erro não
-    interrompe o resto. Sem espaço na biblioteca, para."""
+    interrompe o resto. Sem espaço, ou com o Seafile fora do ar, para."""
     counts = {"enviados": 0, "erros": 0, "pulados": 0}
     sent = 0
     workdir.mkdir(parents=True, exist_ok=True)
@@ -554,7 +576,7 @@ def execute(
             counts["pulados"] += 1
             print(f"pulado  {action.path}  ({exc.reason})", file=sys.stderr)
             continue
-        except QuotaExceeded:
+        except (QuotaExceeded, SeafileUnavailable):
             raise
         except Exception as exc:
             counts["erros"] += 1
@@ -630,7 +652,12 @@ class SeafileClient:
         return names
 
     def upload_file(self, parent_dir: str, filename: str, stream) -> None:
-        parent = parent_dir_form(parent_dir)
+        # Link da raiz e relative_path: o fileserver do Seafile cria a pasta.
+        # Um link pedido para a subpasta exige que ela já exista e recusa o envio.
+        relative = seafile_relative_path(parent_dir)
+        form = {"parent_dir": "/", "replace": "1"}
+        if relative:
+            form["relative_path"] = relative
         delay = 2.0
         last_error: Exception | None = None
         for attempt in range(4):
@@ -638,18 +665,18 @@ class SeafileClient:
                 stream.seek(0)
             except (AttributeError, OSError):
                 pass
-            link = self._upload_link(parent)
+            link = self._upload_link("/")
             separator = "&" if "?" in link else "?"
             try:
                 response = self.session.post(
                     f"{link}{separator}ret-json=1",
-                    data={"parent_dir": parent, "replace": "1"},
+                    data=form,
                     files={"file": (filename, stream, "application/octet-stream")},
                     timeout=(30, None),
                 )
             except self._requests.RequestException as exc:
                 last_error = exc
-                self._upload_links.pop(api_path(parent_dir), None)
+                self._upload_links.pop("/", None)
                 if attempt == 3:
                     break
                 time.sleep(delay)
@@ -659,11 +686,15 @@ class SeafileClient:
                 raise QuotaExceeded(response.text[:300] or "sem espaço na biblioteca")
             if response.status_code in {400, 440, 442}:
                 raise UploadRejected(f"{response.status_code}: {response.text[:300]}")
-            if response.status_code in {403, 500, 502, 503} and attempt < 3:
-                self._upload_links.pop(api_path(parent_dir), None)
-                time.sleep(delay)
+            if response.status_code in {403, 500} | GATEWAY_STATUS and attempt < 3:
+                self._upload_links.pop("/", None)
+                _pause(delay, f"aviso: Seafile respondeu {response.status_code}; nova tentativa")
                 delay *= 2
                 continue
+            if response.status_code in GATEWAY_STATUS:
+                raise SeafileUnavailable(
+                    f"{response.status_code} em {response.url}: {response.text[:300]}"
+                )
             try:
                 response.raise_for_status()
             except self._requests.HTTPError as exc:
@@ -676,19 +707,43 @@ class SeafileClient:
         cached = self._upload_links.get(directory)
         if cached:
             return cached
-        response = self.session.get(
-            f"{self.base}/api2/repos/{self.repo_id}/upload-link/",
-            params={"p": directory},
-            timeout=(30, 120),
-        )
-        response.raise_for_status()
-        content_type = response.headers.get("content-type", "")
-        url = response.json() if "json" in content_type else response.text
-        if not isinstance(url, str):
-            raise SeafileError(f"link de upload inesperado: {url!r}")
-        normalized = normalize_upload_url(url, self.base)
-        self._upload_links[directory] = normalized
-        return normalized
+        delay = 5.0
+        last_error: Exception | None = None
+        url = f"{self.base}/api2/repos/{self.repo_id}/upload-link/"
+        for attempt in range(6):
+            try:
+                response = self.session.get(url, params={"p": directory}, timeout=(30, 120))
+            except self._requests.RequestException as exc:
+                last_error = exc
+                if attempt == 5:
+                    break
+                _pause(delay, f"aviso: link de upload falhou ({exc}); nova tentativa")
+                delay = min(delay * 2, 60)
+                continue
+            if response.status_code in GATEWAY_STATUS:
+                last_error = SeafileError(
+                    f"{response.status_code} {response.reason} for url: {response.url}"
+                )
+                if attempt == 5:
+                    break
+                _pause(
+                    delay,
+                    f"aviso: Seafile respondeu {response.status_code} ao pedir o link; nova tentativa",
+                )
+                delay = min(delay * 2, 60)
+                continue
+            try:
+                response.raise_for_status()
+            except self._requests.HTTPError as exc:
+                raise SeafileError(f"{response.status_code}: {response.text[:300]}") from exc
+            content_type = response.headers.get("content-type", "")
+            payload = response.json() if "json" in content_type else response.text
+            if not isinstance(payload, str):
+                raise SeafileError(f"link de upload inesperado: {payload!r}")
+            normalized = normalize_upload_url(payload, self.base)
+            self._upload_links[directory] = normalized
+            return normalized
+        raise SeafileUnavailable(f"link de upload falhou: {last_error}")
 
 
 def seafile_token(base_url: str, user: str, password: str) -> str:
@@ -974,6 +1029,10 @@ def main(argv: list[str] | None = None) -> int:
     def _upload(action: Upload, dest: Path) -> None:
         with dest.open("rb") as handle:
             client.upload_file(action.parent_dir, action.filename, handle)
+        # O commit do arquivo anterior ainda está fechando. Outro envio
+        # em seguida derruba o fileserver e o proxy responde 502.
+        pause = 8.0 if action.size is not None and action.size >= 32 * 1024 * 1024 else 2.0
+        time.sleep(pause)
 
     try:
         counts = execute(
@@ -987,6 +1046,13 @@ def main(argv: list[str] | None = None) -> int:
         )
     except QuotaExceeded as exc:
         print(f"sem espaço no Seafile: {exc}", file=sys.stderr)
+        persist()
+        return 1
+    except SeafileUnavailable as exc:
+        print(
+            f"Seafile indisponível ({exc}). O que já foi enviado fica no estado; rode de novo.",
+            file=sys.stderr,
+        )
         persist()
         return 1
 
