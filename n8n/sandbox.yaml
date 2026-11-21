@@ -1,0 +1,370 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-api-ingress
+  namespace: n8n-sandbox
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: n8n
+      podSelector:
+        matchLabels:
+          app: n8n
+    ports:
+    - port: 8080
+      protocol: TCP
+  - from:
+    - podSelector:
+        matchLabels:
+          app: sandbox-runner
+    ports:
+    - port: 8080
+      protocol: TCP
+    - port: 9090
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app: sandbox-api
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-runner-ingress
+  namespace: n8n-sandbox
+spec:
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: sandbox-api
+    ports:
+    - port: 8080
+      protocol: TCP
+    - port: 9091
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app: sandbox-runner
+  policyTypes:
+  - Ingress
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: sandbox-api
+  name: sandbox-api
+  namespace: n8n-sandbox
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: sandbox-api
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: sandbox-api
+    spec:
+      containers:
+      - env:
+        - name: SANDBOX_API_KEYS
+          valueFrom:
+            secretKeyRef:
+              key: API_KEY
+              name: n8n-sandbox-secrets
+        - name: SANDBOX_API_RUNNER_REGISTRATION_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: REGISTRATION_TOKEN
+              name: n8n-sandbox-secrets
+        - name: SANDBOX_API_RUNNER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: RUNNER_KEY
+              name: n8n-sandbox-secrets
+        - name: SANDBOX_API_GRPC_TLS_CERT_FILE
+          value: /tls/api/grpc-server.crt
+        - name: SANDBOX_API_GRPC_TLS_KEY_FILE
+          value: /tls/api/grpc-server.key
+        - name: SANDBOX_API_GRPC_TLS_CLIENT_CA_FILE
+          value: /tls/api/ca.crt
+        - name: SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CA_FILE
+          value: /tls/api/ca.crt
+        - name: SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CERT_FILE
+          value: /tls/api/control-grpc-api-client.crt
+        - name: SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_KEY_FILE
+          value: /tls/api/control-grpc-api-client.key
+        - name: SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_SERVER_NAME
+          value: sandbox-runner-1
+        image: ghcr.io/n8n-io/n8n-sandbox-service-api:1.12.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: sandbox-api
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 9090
+          name: grpc
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /tls
+          name: sandbox-tls
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      initContainers:
+      - args:
+        - '[ -f /tls/.ready ] || ( bootstrap-mtls.sh --out-dir /tls --api-san sandbox-api --control-san-prefix sandbox-runner
+          --world-readable && chown -R sandbox-api:sandbox-api /tls/api && chmod -R a+rX /tls && touch /tls/.ready )
+
+          '
+        command:
+        - sh
+        - -c
+        env:
+        - name: NUM_RUNNERS
+          value: '1'
+        image: ghcr.io/n8n-io/n8n-sandbox-service-api:1.12.0
+        imagePullPolicy: IfNotPresent
+        name: sandbox-certs
+        resources: {}
+        securityContext:
+          runAsUser: 0
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /tls
+          name: sandbox-tls
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: sandbox-tls
+        persistentVolumeClaim:
+          claimName: sandbox-tls
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: sandbox-runner
+  name: sandbox-runner-1
+  namespace: n8n-sandbox
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: sandbox-runner
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: sandbox-runner
+    spec:
+      containers:
+      - env:
+        - name: SANDBOX_RUNNER_REGISTRATION_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: REGISTRATION_TOKEN
+              name: n8n-sandbox-secrets
+        - name: SANDBOX_RUNNER_API_KEYS
+          valueFrom:
+            secretKeyRef:
+              key: RUNNER_KEY
+              name: n8n-sandbox-secrets
+        - name: SANDBOX_RUNNER_API_GRPC_ADDR
+          value: sandbox-api:9090
+        - name: SANDBOX_RUNNER_HTTP_BASE_URL
+          value: https://sandbox-runner-1:8080
+        - name: SANDBOX_RUNNER_CONTROL_GRPC_LISTEN_ADDR
+          value: :9091
+        - name: SANDBOX_RUNNER_CONTROL_GRPC_ADVERTISE_ADDR
+          value: sandbox-runner-1:9091
+        - name: SANDBOX_RUNNER_ID
+          value: runner-1
+        - name: SANDBOX_RUNNER_DOCKER_SANDBOX_IMAGE
+          value: ghcr.io/n8n-io/n8n-sandbox-service-sandbox:1.12.0
+        - name: SANDBOX_RUNNER_REGISTRATION_GRPC_CA_FILE
+          value: /tls/runner/ca.crt
+        - name: SANDBOX_RUNNER_REGISTRATION_GRPC_CERT_FILE
+          value: /tls/runner/grpc-client.crt
+        - name: SANDBOX_RUNNER_REGISTRATION_GRPC_KEY_FILE
+          value: /tls/runner/grpc-client.key
+        - name: SANDBOX_RUNNER_REGISTRATION_GRPC_SERVER_NAME
+          value: sandbox-api
+        - name: SANDBOX_RUNNER_CONTROL_GRPC_TLS_CERT_FILE
+          value: /tls/runner/control-grpc-server.crt
+        - name: SANDBOX_RUNNER_CONTROL_GRPC_TLS_KEY_FILE
+          value: /tls/runner/control-grpc-server.key
+        - name: SANDBOX_RUNNER_CONTROL_GRPC_TLS_CLIENT_CA_FILE
+          value: /tls/runner/ca.crt
+        image: ghcr.io/n8n-io/n8n-sandbox-service-runner-dind:1.12.0
+        imagePullPolicy: IfNotPresent
+        name: sandbox-runner-1
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 9091
+          name: grpc
+          protocol: TCP
+        resources:
+          limits:
+            cpu: '2'
+            memory: 2Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        securityContext:
+          privileged: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /tls
+          name: sandbox-tls
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      initContainers:
+      - args:
+        - 'until [ -f /tls/.ready ] && wget -qO- http://sandbox-api:8080/healthz; do sleep 2; done
+
+          '
+        command:
+        - sh
+        - -c
+        image: ghcr.io/n8n-io/n8n-sandbox-service-api:1.12.0
+        imagePullPolicy: IfNotPresent
+        name: wait-for-api
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /tls
+          name: sandbox-tls
+          readOnly: true
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: sandbox-tls
+        persistentVolumeClaim:
+          claimName: sandbox-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: sandbox-api
+  name: sandbox-api
+  namespace: n8n-sandbox
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  - name: grpc
+    port: 9090
+    protocol: TCP
+    targetPort: 9090
+  selector:
+    app: sandbox-api
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: sandbox-runner
+  name: sandbox-runner-1
+  namespace: n8n-sandbox
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  - name: grpc
+    port: 9091
+    protocol: TCP
+    targetPort: 9091
+  selector:
+    app: sandbox-runner
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    pv.kubernetes.io/bind-completed: 'yes'
+    pv.kubernetes.io/bound-by-controller: 'yes'
+    volume.beta.kubernetes.io/storage-provisioner: rancher.io/local-path
+    volume.kubernetes.io/selected-node: talos-o0s-vw5
+    volume.kubernetes.io/storage-provisioner: rancher.io/local-path
+    argocd.argoproj.io/sync-options: Prune=false
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: sandbox-tls
+  namespace: n8n-sandbox
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: local-path
+  volumeName: pvc-4a48808c-de30-4a74-b09c-93860b3906fa
