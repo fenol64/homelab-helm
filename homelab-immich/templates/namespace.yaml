@@ -1,0 +1,8 @@
+{{- if .Values.namespace.create }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "homelab-immich.namespace" . }}
+  labels:
+    {{- include "homelab-immich.labels" . | nindent 4 }}
+{{- end }}

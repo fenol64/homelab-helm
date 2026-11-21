@@ -1,0 +1,35 @@
+{{- if not .Values.storage.data.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "homelab-seafile.dataPvcName" . }}
+  namespace: {{ include "homelab-seafile.namespace" . }}
+  labels:
+    {{- include "homelab-seafile.componentLabels" (dict "root" . "component" "data") | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.storage.data.accessMode | default "ReadWriteOnce" }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.data.size }}
+  {{- if .Values.storage.storageClassName }}
+  storageClassName: {{ .Values.storage.storageClassName | quote }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "homelab-seafile.databasePvcName" . }}
+  namespace: {{ include "homelab-seafile.namespace" . }}
+  labels:
+    {{- include "homelab-seafile.componentLabels" (dict "root" . "component" "database") | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.storage.database.size }}
+  {{- if .Values.storage.storageClassName }}
+  storageClassName: {{ .Values.storage.storageClassName | quote }}
+  {{- end }}

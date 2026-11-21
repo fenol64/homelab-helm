@@ -120,14 +120,33 @@ helm -n media uninstall media
 # kubectl -n media delete pvc --all
 ```
 
+## Fotos (Immich) e arquivos (Seafile)
+
+Dois charts, dois namespaces. No Seagate de 1 TB a partição de filmes continua com 400Gi. Fotos e arquivos ficam nas partições seguintes: **280Gi** (`/var/mnt/photos`) e **220Gi** (`/var/mnt/files`). O Postgres, o MariaDB e o cache dos modelos ficam no SSD. O manifesto desses volumes é `homelab-disk/volumes.yaml`.
+
+```bash
+helm upgrade --install photos ./homelab-immich \
+  -n photos --create-namespace \
+  -f ./homelab-immich/values-homelab.yaml
+
+helm upgrade --install drive ./homelab-seafile \
+  -n drive --create-namespace \
+  -f ./homelab-seafile/values-homelab.yaml
+```
+
+| | URL | Primeiro acesso |
+|---|---|---|
+| Fotos | http://photos.192.168.0.42.sslip.io/ | o Immich pede para criar o admin |
+| Arquivos | http://drive.192.168.0.42.sslip.io/ | `admin@home.arpa` e a senha em `homelab-seafile/values-homelab.yaml` (`server.admin.password`) |
+
+A senha do Seafile só entra na primeira subida. O reconhecimento de fotos roda na CPU e está limitado a 2Gi de RAM.
+
 ## Estrutura
 
 ```
 homelab-arr/
-  Chart.yaml
-  values.yaml
-  values-homelab.yaml
-  templates/
+homelab-immich/
+homelab-seafile/
 ```
 
 ## Limitações

@@ -36,6 +36,9 @@ jellyfin:
       memory: 1536Mi
   ingress:
     host: jellyfin.192.168.0.42.sslip.io
+  tailscale:
+    enabled: true
+    hostname: jellyfin
 
 jellyseerr:
   enabled: true
@@ -46,6 +49,9 @@ jellyseerr:
       memory: 384Mi
   ingress:
     host: seerr.192.168.0.42.sslip.io
+  tailscale:
+    enabled: true
+    hostname: seerr
 
 radarr:
   enabled: true

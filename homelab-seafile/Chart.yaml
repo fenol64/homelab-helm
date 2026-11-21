@@ -1,0 +1,14 @@
+apiVersion: v2
+name: homelab-seafile
+description: Seafile drive for a Talos homelab (community edition, MariaDB, Redis)
+type: application
+version: 0.1.0
+appVersion: "14.0.9"
+keywords:
+  - seafile
+  - drive
+  - files
+  - homelab
+  - talos
+maintainers:
+  - name: homelab

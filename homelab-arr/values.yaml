@@ -56,6 +56,10 @@ jellyfin:
     host: jellyfin.home.arpa
     path: /
     tls: false
+  # Tailscale Ingress (tailnet only). Hostname becomes <hostname>.<tailnet>.ts.net.
+  tailscale:
+    enabled: false
+    hostname: jellyfin
 
 jellyseerr:
   enabled: true
@@ -81,6 +85,9 @@ jellyseerr:
     host: seerr.home.arpa
     path: /
     tls: false
+  tailscale:
+    enabled: false
+    hostname: seerr
 
 radarr:
   enabled: true

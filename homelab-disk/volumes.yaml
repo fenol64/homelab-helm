@@ -1,0 +1,162 @@
+# Static volumes on the Seagate ST1000LM048.
+# sdb1 movies 400Gi is mounted by the movies-disk DaemonSet.
+# sdb2 photos 280Gi and sdb3 files 220Gi are mounted here.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: photos-files-disk
+  namespace: kube-system
+  labels:
+    app: photos-files-disk
+spec:
+  selector:
+    matchLabels:
+      app: photos-files-disk
+  template:
+    metadata:
+      labels:
+        app: photos-files-disk
+    spec:
+      hostPID: true
+      nodeSelector:
+        kubernetes.io/hostname: talos-o0s-vw5
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: mount
+          image: alpine:3.22
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              apk add --no-cache util-linux >/dev/null
+              mount_one() {
+                label="$1"
+                dir="$2"
+                min_bytes="$3"
+                max_bytes="$4"
+                i=0
+                while [ ! -b "/host/dev/disk/by-partlabel/$label" ]; do
+                  i=$((i+1))
+                  if [ "$i" -ge 30 ]; then
+                    echo "$label partition did not appear"
+                    exit 1
+                  fi
+                  sleep 2
+                done
+                link=$(readlink "/host/dev/disk/by-partlabel/$label")
+                part=/host/dev/$(basename "$link")
+                disk=$(basename "$part" | sed 's/[0-9]*$//')
+                model=$(tr -d ' ' < "/sys/block/$disk/device/model")
+                echo "part=$part model=$model label=$label"
+                echo "$model" | grep -qx 'ST1000LM048-2E71'
+                blkid "$part" | grep -q "LABEL=\"$label\""
+                blkid "$part" | grep -q 'TYPE="xfs"'
+                bytes=$(blockdev --getsize64 "$part")
+                echo "bytes=$bytes"
+                [ "$bytes" -ge "$min_bytes" ]
+                [ "$bytes" -le "$max_bytes" ]
+                mkdir -p "/host-mnt/$dir"
+                if ! findmnt -n "/host-mnt/$dir" >/dev/null 2>&1; then
+                  mount -t xfs -o noatime "$part" "/host-mnt/$dir"
+                fi
+                chmod 0777 "/host-mnt/$dir"
+                findmnt -n "/host-mnt/$dir"
+              }
+              mount_one photos photos 300000000000 302000000000
+              mount_one files files 235000000000 238000000000
+              df -h /host-mnt/photos /host-mnt/files
+              while true; do
+                findmnt -n /host-mnt/photos >/dev/null
+                findmnt -n /host-mnt/files >/dev/null
+                sleep 60
+              done
+          volumeMounts:
+            - name: dev
+              mountPath: /host/dev
+            - name: mnt
+              mountPath: /host-mnt
+              mountPropagation: Bidirectional
+      volumes:
+        - name: dev
+          hostPath:
+            path: /dev
+        - name: mnt
+          hostPath:
+            path: /var/mnt
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: photos-library
+spec:
+  capacity:
+    storage: 280Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: movies-hdd
+  local:
+    path: /var/mnt/photos
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - talos-o0s-vw5
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: files-data
+spec:
+  capacity:
+    storage: 220Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: movies-hdd
+  local:
+    path: /var/mnt/files
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - talos-o0s-vw5
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: photos-library
+  namespace: photos
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: movies-hdd
+  volumeName: photos-library
+  resources:
+    requests:
+      storage: 280Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: files-data
+  namespace: drive
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: movies-hdd
+  volumeName: files-data
+  resources:
+    requests:
+      storage: 220Gi

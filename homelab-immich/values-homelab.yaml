@@ -1,0 +1,49 @@
+# Nó Talos. A biblioteca fica na partição photos do Seagate (sdb2, 280Gi).
+# Postgres e o cache dos modelos ficam no SSD, via local-path.
+# Uso:
+#   helm upgrade --install photos ./homelab-immich -n photos --create-namespace -f values-homelab.yaml
+
+namespace:
+  create: true
+  name: photos
+
+timezone: America/Sao_Paulo
+
+storage:
+  storageClassName: local-path
+  library:
+    existingClaim: photos-library
+    size: 280Gi
+  database:
+    size: 10Gi
+  modelCache:
+    size: 8Gi
+
+database:
+  storageType: SSD
+  password: changeme
+
+server:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      cpu: "2"
+      memory: 1536Mi
+  ingress:
+    host: photos.192.168.0.42.sslip.io
+  tailscale:
+    enabled: true
+    hostname: photos
+
+machineLearning:
+  resources:
+    requests:
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+
+ingress:
+  enabled: true
+  className: traefik

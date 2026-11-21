@@ -1,0 +1,20 @@
+{{- $app := .Values.server }}
+{{- if and $app.tailscale $app.tailscale.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "homelab-immich.fullname" . }}-server-tailscale
+  namespace: {{ include "homelab-immich.namespace" . }}
+  labels:
+    {{- include "homelab-immich.componentLabels" (dict "root" . "component" "server") | nindent 4 }}
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: {{ include "homelab-immich.fullname" . }}-server
+      port:
+        name: http
+  tls:
+    - hosts:
+        - {{ $app.tailscale.hostname | quote }}
+{{- end }}
