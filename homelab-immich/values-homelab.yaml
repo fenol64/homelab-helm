@@ -21,7 +21,7 @@ storage:
 
 database:
   storageType: SSD
-  password: changeme
+  password: cf447fc2e1bc887ae434968f6751c848169bb4ab2cf5ac40
 
 server:
   resources:

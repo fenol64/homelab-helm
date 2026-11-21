@@ -22,7 +22,7 @@ server:
   publicHost: drive.taileba3bd.ts.net
   admin:
     email: admin@home.arpa
-    password: changeme
+    password: 50a0451d5412d5e20da8b40a
   resources:
     requests:
       memory: 256Mi
@@ -35,14 +35,14 @@ server:
     hostname: drive
 
 database:
-  password: changemechangeme
-  rootPassword: changemechangeme
+  password: 5333333d7cd47f53953f7367cb961698a3a4
+  rootPassword: 8cda1a3e1167ddf83424fa54b1a6a841b6da
 
 redis:
-  password: changemechangeme
+  password: 45a8fa2c6d9c5e3646e6524c7b2bd508
 
 auth:
-  jwtPrivateKey: changemechangemechangemechangeme
+  jwtPrivateKey: 9bb0d6b4df8a3bc2d4e999eca40039a57d0618ef4d1a14c4
 
 ingress:
   enabled: true
