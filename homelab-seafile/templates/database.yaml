@@ -1,0 +1,79 @@
+{{- $component := "database" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "homelab-seafile.fullname" . }}-{{ $component }}
+  namespace: {{ include "homelab-seafile.namespace" . }}
+  labels:
+    {{- include "homelab-seafile.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "homelab-seafile.componentSelectorLabels" (dict "root" . "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "homelab-seafile.componentSelectorLabels" (dict "root" . "component" $component) | nindent 8 }}
+    spec:
+      securityContext:
+        fsGroup: {{ .Values.database.fsGroup }}
+      containers:
+        - name: mariadb
+          image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
+          imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "homelab-seafile.secretName" . }}
+                  key: db-root-password
+            - name: MYSQL_LOG_CONSOLE
+              value: "true"
+            - name: MARIADB_AUTO_UPGRADE
+              value: "1"
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+          resources:
+            {{- toYaml .Values.database.resources | nindent 12 }}
+          startupProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect", "--innodb_initialized"]
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect", "--innodb_initialized"]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect", "--innodb_initialized"]
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "homelab-seafile.databasePvcName" . }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "homelab-seafile.databaseHost" . }}
+  namespace: {{ include "homelab-seafile.namespace" . }}
+  labels:
+    {{- include "homelab-seafile.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3306
+      targetPort: mysql
+      protocol: TCP
+      name: mysql
+  selector:
+    {{- include "homelab-seafile.componentSelectorLabels" (dict "root" . "component" $component) | nindent 4 }}

@@ -1,0 +1,17 @@
+Immich instalado no namespace {{ include "homelab-immich.namespace" . }}.
+
+{{- if or .Values.ingress.enabled .Values.server.ingress.enabled }}
+
+Fotos: http://{{ .Values.server.ingress.host }}/
+{{- else }}
+
+  kubectl -n {{ include "homelab-immich.namespace" . }} port-forward svc/{{ include "homelab-immich.fullname" . }}-server 2283:2283
+  Abra http://127.0.0.1:2283/
+{{- end }}
+
+No primeiro acesso o Immich pede para criar a conta de administrador.
+A senha do banco não é a senha de login.
+
+O reconhecimento facial e a busca rodam na CPU (GeForce 520 sem uso aqui).
+A primeira indexação é lenta. O container de machine learning está limitado em memória
+para não disputar RAM com o Jellyfin.

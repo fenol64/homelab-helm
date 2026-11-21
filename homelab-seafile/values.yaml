@@ -1,0 +1,104 @@
+nameOverride: ""
+fullnameOverride: ""
+
+namespace:
+  create: true
+  name: drive
+
+timezone: America/Sao_Paulo
+
+# storage.data is the drive. The MariaDB volume is separate and small.
+# Database and admin passwords apply only on the first start.
+storage:
+  storageClassName: ""
+  data:
+    size: 220Gi
+    accessMode: ReadWriteOnce
+    # existingClaim: ""
+  database:
+    size: 8Gi
+
+server:
+  protocol: http
+  siteRoot: /
+  logToStdout: true
+  image:
+    repository: seafileltd/seafile-mc
+    tag: "14.0.9"
+    pullPolicy: IfNotPresent
+  admin:
+    email: admin@home.arpa
+    password: changeme
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 768Mi
+  ingress:
+    enabled: false
+    host: drive.home.arpa
+    path: /
+    tls: false
+  # publicHost is the URL Seafile puts in links. Defaults to the LAN ingress host.
+  publicHost: ""
+  tailscale:
+    enabled: false
+    hostname: drive
+
+database:
+  fsGroup: 999
+  user: seafile
+  password: changemechangeme
+  rootPassword: changemechangeme
+  names:
+    ccnet: ccnet_db
+    seafile: seafile_db
+    seahub: seahub_db
+  image:
+    repository: mariadb
+    tag: "10.11"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 768Mi
+
+redis:
+  password: changemechangeme
+  image:
+    repository: redis
+    tag: "7.4-alpine"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
+# At least 32 characters. Seafile reads this on every start.
+auth:
+  jwtPrivateKey: changemechangemechangemechangeme
+
+# Drive only. Office, notifications and AI stay off.
+features:
+  seadoc: false
+  seafdav: false
+  notificationServer: false
+  metadata: false
+  seafileAi: false
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # tlsSecretName: drive-tls

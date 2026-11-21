@@ -1,0 +1,89 @@
+{{- $component := "database" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "homelab-immich.fullname" . }}-{{ $component }}
+  namespace: {{ include "homelab-immich.namespace" . }}
+  labels:
+    {{- include "homelab-immich.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "homelab-immich.componentSelectorLabels" (dict "root" . "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "homelab-immich.componentSelectorLabels" (dict "root" . "component" $component) | nindent 8 }}
+    spec:
+      securityContext:
+        fsGroup: {{ .Values.database.fsGroup }}
+      containers:
+        - name: postgres
+          image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
+          imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.database.username | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.database.name | quote }}
+            - name: POSTGRES_INITDB_ARGS
+              value: "--data-checksums"
+            - name: DB_STORAGE_TYPE
+              value: {{ .Values.database.storageType | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "homelab-immich.secretName" . }}
+                  key: db-password
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: dshm
+              mountPath: /dev/shm
+          resources:
+            {{- toYaml .Values.database.resources | nindent 12 }}
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.database.username | quote }}, "-d", {{ .Values.database.name | quote }}]
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.database.username | quote }}, "-d", {{ .Values.database.name | quote }}]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.database.username | quote }}, "-d", {{ .Values.database.name | quote }}]
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "homelab-immich.databasePvcName" . }}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "homelab-immich.databaseHost" . }}
+  namespace: {{ include "homelab-immich.namespace" . }}
+  labels:
+    {{- include "homelab-immich.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: postgres
+      protocol: TCP
+      name: postgres
+  selector:
+    {{- include "homelab-immich.componentSelectorLabels" (dict "root" . "component" $component) | nindent 4 }}

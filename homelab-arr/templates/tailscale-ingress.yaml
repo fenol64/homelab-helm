@@ -1,0 +1,23 @@
+{{- range $component := list "jellyfin" "jellyseerr" }}
+{{- $app := index $.Values $component }}
+{{- if and $app.enabled $app.tailscale $app.tailscale.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "homelab-arr.fullname" $ }}-{{ $component }}-tailscale
+  namespace: {{ include "homelab-arr.namespace" $ }}
+  labels:
+    {{- include "homelab-arr.componentLabels" (dict "root" $ "component" $component) | nindent 4 }}
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: {{ include "homelab-arr.fullname" $ }}-{{ $component }}
+      port:
+        name: http
+  tls:
+    - hosts:
+        - {{ $app.tailscale.hostname | quote }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,152 @@
+{{- $component := "server" }}
+{{- $app := .Values.server }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "homelab-immich.fullname" . }}-{{ $component }}
+  namespace: {{ include "homelab-immich.namespace" . }}
+  labels:
+    {{- include "homelab-immich.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "homelab-immich.componentSelectorLabels" (dict "root" . "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "homelab-immich.componentSelectorLabels" (dict "root" . "component" $component) | nindent 8 }}
+    spec:
+      initContainers:
+        - name: wait-for-database
+          image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
+          imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ include "homelab-immich.databaseHost" . }} -U {{ .Values.database.username | quote }} -d {{ .Values.database.name | quote }}; do
+                echo "aguardando postgres"
+                sleep 3
+              done
+        - name: wait-for-valkey
+          image: "{{ .Values.valkey.image.repository }}:{{ .Values.valkey.image.tag }}"
+          imagePullPolicy: {{ .Values.valkey.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until redis-cli -h {{ include "homelab-immich.valkeyHost" . }} ping | grep -q PONG; do
+                echo "aguardando valkey"
+                sleep 2
+              done
+      containers:
+        - name: immich
+          image: "{{ $app.image.repository }}:{{ $app.image.tag }}"
+          imagePullPolicy: {{ $app.image.pullPolicy }}
+          env:
+            - name: TZ
+              value: {{ .Values.timezone | quote }}
+            - name: IMMICH_ENV
+              value: production
+            - name: DB_HOSTNAME
+              value: {{ include "homelab-immich.databaseHost" . | quote }}
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USERNAME
+              value: {{ .Values.database.username | quote }}
+            - name: DB_DATABASE_NAME
+              value: {{ .Values.database.name | quote }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "homelab-immich.secretName" . }}
+                  key: db-password
+            - name: REDIS_HOSTNAME
+              value: {{ include "homelab-immich.valkeyHost" . | quote }}
+            - name: REDIS_PORT
+              value: "6379"
+          ports:
+            - name: http
+              containerPort: 2283
+              protocol: TCP
+          volumeMounts:
+            - name: library
+              mountPath: /data
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /api/server/ping
+              port: http
+            periodSeconds: 10
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: /api/server/ping
+              port: http
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/server/ping
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+      volumes:
+        - name: library
+          persistentVolumeClaim:
+            claimName: {{ include "homelab-immich.libraryPvcName" . }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "homelab-immich.fullname" . }}-{{ $component }}
+  namespace: {{ include "homelab-immich.namespace" . }}
+  labels:
+    {{- include "homelab-immich.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  type: {{ $app.service.type }}
+  ports:
+    - port: {{ $app.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "homelab-immich.componentSelectorLabels" (dict "root" . "component" $component) | nindent 4 }}
+{{- if or .Values.ingress.enabled $app.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "homelab-immich.fullname" . }}-{{ $component }}
+  namespace: {{ include "homelab-immich.namespace" . }}
+  labels:
+    {{- include "homelab-immich.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if $app.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ $app.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tlsSecretName | default (printf "%s-%s-tls" (include "homelab-immich.fullname" .) $component) }}
+  {{- end }}
+  rules:
+    - host: {{ $app.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ $app.ingress.path | default "/" }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "homelab-immich.fullname" . }}-{{ $component }}
+                port:
+                  name: http
+{{- end }}

@@ -1,0 +1,52 @@
+{{- if not .Values.storage.library.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "homelab-immich.libraryPvcName" . }}
+  namespace: {{ include "homelab-immich.namespace" . }}
+  labels:
+    {{- include "homelab-immich.componentLabels" (dict "root" . "component" "library") | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.storage.library.accessMode | default "ReadWriteOnce" }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.library.size }}
+  {{- if .Values.storage.storageClassName }}
+  storageClassName: {{ .Values.storage.storageClassName | quote }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "homelab-immich.databasePvcName" . }}
+  namespace: {{ include "homelab-immich.namespace" . }}
+  labels:
+    {{- include "homelab-immich.componentLabels" (dict "root" . "component" "database") | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.storage.database.size }}
+  {{- if .Values.storage.storageClassName }}
+  storageClassName: {{ .Values.storage.storageClassName | quote }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "homelab-immich.modelCachePvcName" . }}
+  namespace: {{ include "homelab-immich.namespace" . }}
+  labels:
+    {{- include "homelab-immich.componentLabels" (dict "root" . "component" "machine-learning") | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.storage.modelCache.size }}
+  {{- if .Values.storage.storageClassName }}
+  storageClassName: {{ .Values.storage.storageClassName | quote }}
+  {{- end }}

@@ -1,0 +1,220 @@
+{{- $component := "server" }}
+{{- $app := .Values.server }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "homelab-seafile.fullname" . }}-{{ $component }}
+  namespace: {{ include "homelab-seafile.namespace" . }}
+  labels:
+    {{- include "homelab-seafile.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "homelab-seafile.componentSelectorLabels" (dict "root" . "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "homelab-seafile.componentSelectorLabels" (dict "root" . "component" $component) | nindent 8 }}
+    spec:
+      initContainers:
+        - name: wait-for-database
+          image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
+          imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+          env:
+            - name: MYSQL_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "homelab-seafile.secretName" . }}
+                  key: db-root-password
+          command:
+            - sh
+            - -c
+            - |
+              until mariadb-admin ping -h {{ include "homelab-seafile.databaseHost" . }} -uroot --silent; do
+                echo "aguardando mariadb"
+                sleep 3
+              done
+        - name: wait-for-redis
+          image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+          imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+          env:
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "homelab-seafile.secretName" . }}
+                  key: redis-password
+          command:
+            - sh
+            - -c
+            - |
+              until redis-cli -h {{ include "homelab-seafile.redisHost" . }} ping | grep -q PONG; do
+                echo "aguardando redis"
+                sleep 2
+              done
+      containers:
+        - name: seafile
+          image: "{{ $app.image.repository }}:{{ $app.image.tag }}"
+          imagePullPolicy: {{ $app.image.pullPolicy }}
+          env:
+            - name: SEAFILE_MYSQL_DB_HOST
+              value: {{ include "homelab-seafile.databaseHost" . | quote }}
+            - name: SEAFILE_MYSQL_DB_PORT
+              value: "3306"
+            - name: SEAFILE_MYSQL_DB_USER
+              value: {{ .Values.database.user | quote }}
+            - name: SEAFILE_MYSQL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "homelab-seafile.secretName" . }}
+                  key: db-password
+            - name: INIT_SEAFILE_MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "homelab-seafile.secretName" . }}
+                  key: db-root-password
+            - name: SEAFILE_MYSQL_DB_CCNET_DB_NAME
+              value: {{ .Values.database.names.ccnet | quote }}
+            - name: SEAFILE_MYSQL_DB_SEAFILE_DB_NAME
+              value: {{ .Values.database.names.seafile | quote }}
+            - name: SEAFILE_MYSQL_DB_SEAHUB_DB_NAME
+              value: {{ .Values.database.names.seahub | quote }}
+            - name: TIME_ZONE
+              value: {{ .Values.timezone | quote }}
+            - name: INIT_SEAFILE_ADMIN_EMAIL
+              value: {{ $app.admin.email | quote }}
+            - name: INIT_SEAFILE_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "homelab-seafile.secretName" . }}
+                  key: admin-password
+            - name: SEAFILE_SERVER_HOSTNAME
+              value: {{ include "homelab-seafile.publicHost" . | quote }}
+            - name: SEAFILE_SERVER_PROTOCOL
+              value: {{ $app.protocol | quote }}
+            - name: SITE_ROOT
+              value: {{ $app.siteRoot | quote }}
+            - name: NON_ROOT
+              value: "false"
+            - name: JWT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "homelab-seafile.secretName" . }}
+                  key: jwt-private-key
+            - name: SEAFILE_LOG_TO_STDOUT
+              value: {{ $app.logToStdout | quote }}
+            - name: ENABLE_GO_FILESERVER
+              value: "true"
+            - name: ENABLE_SEAFDAV
+              value: {{ .Values.features.seafdav | quote }}
+            - name: ENABLE_SEADOC
+              value: {{ .Values.features.seadoc | quote }}
+            - name: SEADOC_SERVER_URL
+              value: {{ printf "%s/sdoc-server" (include "homelab-seafile.publicOrigin" .) | quote }}
+            - name: CACHE_PROVIDER
+              value: redis
+            - name: REDIS_HOST
+              value: {{ include "homelab-seafile.redisHost" . | quote }}
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "homelab-seafile.secretName" . }}
+                  key: redis-password
+            - name: ENABLE_NOTIFICATION_SERVER
+              value: {{ .Values.features.notificationServer | quote }}
+            - name: ENABLE_METADATA_MANAGEMENT
+              value: {{ .Values.features.metadata | quote }}
+            - name: ENABLE_SEAFILE_AI
+              value: {{ .Values.features.seafileAi | quote }}
+            - name: SEAFILE_AI_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "homelab-seafile.secretName" . }}
+                  key: jwt-private-key
+            - name: CSRF_TRUSTED_ORIGINS
+              value: {{ include "homelab-seafile.publicOrigin" . | quote }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /shared
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "homelab-seafile.dataPvcName" . }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "homelab-seafile.fullname" . }}-{{ $component }}
+  namespace: {{ include "homelab-seafile.namespace" . }}
+  labels:
+    {{- include "homelab-seafile.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+spec:
+  type: {{ $app.service.type }}
+  ports:
+    - port: {{ $app.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "homelab-seafile.componentSelectorLabels" (dict "root" . "component" $component) | nindent 4 }}
+{{- if or .Values.ingress.enabled $app.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "homelab-seafile.fullname" . }}-{{ $component }}
+  namespace: {{ include "homelab-seafile.namespace" . }}
+  labels:
+    {{- include "homelab-seafile.componentLabels" (dict "root" . "component" $component) | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if $app.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ $app.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tlsSecretName | default (printf "%s-%s-tls" (include "homelab-seafile.fullname" .) $component) }}
+  {{- end }}
+  rules:
+    - host: {{ $app.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ $app.ingress.path | default "/" }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "homelab-seafile.fullname" . }}-{{ $component }}
+                port:
+                  name: http
+{{- end }}

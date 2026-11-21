@@ -1,0 +1,89 @@
+# Nó Talos, ~12 GiB, StorageClass local-path, Ingress Traefik.
+# O namespace precisa de Pod Security privileged, senão o node-exporter não sobe:
+#   kubectl label namespace monitoring pod-security.kubernetes.io/enforce=privileged --overwrite
+# Uso:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#   helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace \
+#     -f monitoring/values-homelab.yaml
+
+grafana:
+  defaultDashboardsTimezone: America/Sao_Paulo
+  grafana.ini:
+    server:
+      root_url: http://grafana.192.168.0.42.sslip.io
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - grafana.192.168.0.42.sslip.io
+    path: /
+    pathType: Prefix
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+
+alertmanager:
+  alertmanagerSpec:
+    replicas: 1
+    retention: 120h
+    externalUrl: http://alertmanager.192.168.0.42.sslip.io
+    podAntiAffinity: ""
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        memory: 192Mi
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - alertmanager.192.168.0.42.sslip.io
+    paths:
+      - /
+    pathType: Prefix
+
+prometheus:
+  prometheusSpec:
+    replicas: 1
+    retention: 2d
+    retentionSize: 6GiB
+    podAntiAffinity: ""
+    # O operator monta o TSDB em subPath. O kubelet cria essa pasta como root
+    # e o fsGroup não vale para subPath, então o uid 1000 toma permission denied.
+    securityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 8Gi

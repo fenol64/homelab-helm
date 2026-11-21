@@ -1,0 +1,106 @@
+nameOverride: ""
+fullnameOverride: ""
+
+namespace:
+  create: true
+  name: photos
+
+timezone: America/Sao_Paulo
+
+# User data lives on storage.library. Postgres and the ML model cache are separate
+# and small. The password is used only when the database PVC is first created;
+# changing it later does not rotate the password inside Postgres.
+storage:
+  storageClassName: "" # local-path, longhorn, ...
+  library:
+    size: 280Gi
+    accessMode: ReadWriteOnce
+    # existingClaim: ""
+  database:
+    size: 10Gi
+  modelCache:
+    size: 8Gi
+
+database:
+  # SSD or HDD. HDD lowers Postgres IO concurrency for a spinning disk.
+  storageType: SSD
+  username: postgres
+  name: immich
+  # Letters and digits only.
+  password: changeme
+  fsGroup: 999
+  image:
+    # Image published by Immich. The VectorChord build must match the server version.
+    repository: ghcr.io/immich-app/postgres
+    tag: "14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+valkey:
+  image:
+    repository: docker.io/valkey/valkey
+    tag: "9@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+server:
+  image:
+    repository: ghcr.io/immich-app/immich-server
+    tag: v3.4.2
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 2283
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      cpu: "2"
+      memory: 1536Mi
+  ingress:
+    enabled: false
+    host: photos.home.arpa
+    path: /
+    tls: false
+  tailscale:
+    enabled: false
+    hostname: photos
+
+# GeForce 520 has no useful CUDA. ML stays on CPU.
+# workers: 1 and a 2Gi limit keep it from crowding out Jellyfin.
+machineLearning:
+  enabled: true
+  image:
+    repository: ghcr.io/immich-app/immich-machine-learning
+    tag: v3.4.2
+    pullPolicy: IfNotPresent
+  modelRevision: v2
+  workers: 1
+  requestThreads: 2
+  modelTtl: 300
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # tlsSecretName: photos-tls

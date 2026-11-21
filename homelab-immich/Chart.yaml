@@ -1,0 +1,13 @@
+apiVersion: v2
+name: homelab-immich
+description: Immich photo library for a Talos homelab (server, machine learning, Postgres, Valkey)
+type: application
+version: 0.1.0
+appVersion: "3.4.2"
+keywords:
+  - immich
+  - photos
+  - homelab
+  - talos
+maintainers:
+  - name: homelab
