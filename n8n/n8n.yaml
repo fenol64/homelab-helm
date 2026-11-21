@@ -1,0 +1,346 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: searxng-ingress
+  namespace: n8n
+spec:
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: n8n
+    ports:
+    - port: 8080
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app: searxng
+  policyTypes:
+  - Ingress
+---
+apiVersion: v1
+data:
+  settings.yml: |
+    # SearXNG configuration for the n8n AI assistant.
+    # A imagem padrão serve só HTML; a busca do n8n precisa da API JSON.
+    use_default_settings: true
+    search:
+      formats:
+        - html
+        - json
+kind: ConfigMap
+metadata:
+  name: searxng-settings
+  namespace: n8n
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: n8n
+  name: n8n
+  namespace: n8n
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: n8n
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: n8n
+    spec:
+      containers:
+      - env:
+        - name: N8N_PORT
+          value: '5678'
+        - name: N8N_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              key: N8N_ENCRYPTION_KEY
+              name: n8n-secrets
+        - name: N8N_EDITOR_BASE_URL
+          value: https://n8n.taileba3bd.ts.net
+        - name: WEBHOOK_URL
+          value: https://n8n-hooks.taileba3bd.ts.net/
+        - name: N8N_INSTANCE_AI_SEARXNG_URL
+          value: http://searxng:8080
+        - name: N8N_INSTANCE_AI_SANDBOX_ENABLED
+          value: 'true'
+        - name: N8N_INSTANCE_AI_SANDBOX_PROVIDER
+          value: n8n-sandbox
+        - name: N8N_SANDBOX_SERVICE_URL
+          value: http://sandbox-api.n8n-sandbox.svc.cluster.local:8080
+        - name: N8N_SANDBOX_SERVICE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: N8N_SANDBOX_SERVICE_API_KEY
+              name: n8n-secrets
+        image: docker.io/n8nio/n8n:2.45.3
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 5678
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: n8n
+        ports:
+        - containerPort: 5678
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz/readiness
+            port: 5678
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: '1'
+            memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /home/node/.n8n
+          name: data
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: n8n-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: searxng
+  name: searxng
+  namespace: n8n
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: searxng
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: searxng
+    spec:
+      containers:
+      - env:
+        - name: SEARXNG_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: SEARXNG_SECRET
+              name: searxng-secrets
+        image: ghcr.io/searxng/searxng:2026.10.25-54ca1d9cf
+        imagePullPolicy: IfNotPresent
+        name: searxng
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/searxng/settings.yml
+          name: settings
+          readOnly: true
+          subPath: settings.yml
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: searxng-settings
+        name: settings
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: n8n
+  name: n8n
+  namespace: n8n
+spec:
+  ports:
+  - name: http
+    port: 5678
+    protocol: TCP
+    targetPort: 5678
+  selector:
+    app: n8n
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: searxng
+  name: searxng
+  namespace: n8n
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: searxng
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: n8n
+  namespace: n8n
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: n8n.192.168.0.42.sslip.io
+    http:
+      paths:
+      - backend:
+          service:
+            name: n8n
+            port:
+              number: 5678
+        path: /
+        pathType: Prefix
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  finalizers:
+  - tailscale.com/finalizer
+  name: n8n-tailnet
+  namespace: n8n
+spec:
+  defaultBackend:
+    service:
+      name: n8n
+      port:
+        number: 5678
+  ingressClassName: tailscale
+  tls:
+  - hosts:
+    - n8n
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: n8n-webhooks
+  namespace: n8n
+spec:
+  ingressClassName: traefik
+  rules:
+  - http:
+      paths:
+      - backend:
+          service:
+            name: n8n
+            port:
+              number: 5678
+        path: /webhook
+        pathType: Prefix
+      - backend:
+          service:
+            name: n8n
+            port:
+              number: 5678
+        path: /webhook-test
+        pathType: Prefix
+      - backend:
+          service:
+            name: n8n
+            port:
+              number: 5678
+        path: /webhook-waiting
+        pathType: Prefix
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    pv.kubernetes.io/bind-completed: 'yes'
+    pv.kubernetes.io/bound-by-controller: 'yes'
+    volume.beta.kubernetes.io/storage-provisioner: rancher.io/local-path
+    volume.kubernetes.io/selected-node: talos-o0s-vw5
+    volume.kubernetes.io/storage-provisioner: rancher.io/local-path
+    argocd.argoproj.io/sync-options: Prune=false
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: n8n-data
+  namespace: n8n
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+  volumeName: pvc-bf77bf65-41c8-4580-83f2-2c9e07ba4bd0
