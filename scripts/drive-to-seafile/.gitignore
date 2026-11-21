@@ -1,0 +1,6 @@
+credentials.json
+client_secret*.json
+token.json
+.drive-sync/
+__pycache__/
+*.pyc
