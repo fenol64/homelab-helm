@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: photos
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: homelab
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/fenol64/homelab-helm.git
+    targetRevision: main
+    path: homelab-immich
+    helm:
+      releaseName: photos
+      valueFiles:
+        - values-homelab.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: photos
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
