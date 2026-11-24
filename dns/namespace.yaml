@@ -4,5 +4,5 @@ metadata:
   name: dns
   labels:
     app.kubernetes.io/part-of: homelab
-    # hostPort 53 e o processo root da imagem cabem no baseline.
-    pod-security.kubernetes.io/enforce: baseline
+    # hostPort é recusado no baseline. O Traefik usa o mesmo rótulo para a porta 80.
+    pod-security.kubernetes.io/enforce: privileged
