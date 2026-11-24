@@ -247,6 +247,9 @@ spec:
       labels:
         app.kubernetes.io/name: adguard
         app.kubernetes.io/part-of: homelab
+      annotations:
+        # O ReplicaSet anterior esgotou o prazo enquanto o namespace ainda era baseline.
+        homelab.local/rollout: pod-security-privileged
     spec:
       # O pod resolve upstream e as listas pelo CoreDNS. Não aponta para si.
       dnsPolicy: ClusterFirst
