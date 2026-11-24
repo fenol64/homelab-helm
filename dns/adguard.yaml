@@ -33,8 +33,9 @@ data:
     language: pt-br
     theme: auto
     dns:
+      # Só o IP da LAN. 0.0.0.0:53 também atende 127.0.0.53, que é o DNS do nó.
       bind_hosts:
-        - 0.0.0.0
+        - 192.168.0.47
       port: 53
       anonymize_client_ip: false
       ratelimit: 50
@@ -248,11 +249,13 @@ spec:
         app.kubernetes.io/name: adguard
         app.kubernetes.io/part-of: homelab
       annotations:
-        # O ReplicaSet anterior esgotou o prazo enquanto o namespace ainda era baseline.
-        homelab.local/rollout: pod-security-privileged
+        # hostPort 53 desvia o DNS do nó (127.0.0.53) para o pod e o pull da imagem falha.
+        homelab.local/rollout: host-network
     spec:
-      # O pod resolve upstream e as listas pelo CoreDNS. Não aponta para si.
-      dnsPolicy: ClusterFirst
+      # Escuta 192.168.0.47:53 direto no nó, sem hostPort. O hostPort rouba a porta 53
+      # do nó inteiro, inclusive o resolver local, e o container não consegue baixar a imagem.
+      hostNetwork: true
+      dnsPolicy: Default
       initContainers:
         - name: seed-config
           image: busybox:1.37.0
@@ -279,11 +282,9 @@ spec:
             - name: dns-udp
               containerPort: 53
               protocol: UDP
-              hostPort: 53
             - name: dns-tcp
               containerPort: 53
               protocol: TCP
-              hostPort: 53
             - name: http
               containerPort: 3000
               protocol: TCP
