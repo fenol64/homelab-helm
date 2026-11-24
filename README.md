@@ -1,6 +1,6 @@
 # Homelab
 
-GitOps de um nó Talos (`talos-o0s-vw5`, ~12 GiB de RAM, LAN `192.168.0.42`). O que está em `main` neste repositório é o que o cluster roda: o Argo CD lê o GitHub e aplica os charts e os manifestos.
+GitOps de um nó Talos (`talos-o0s-vw5`, ~12 GiB de RAM, LAN `192.168.0.47`). O que está em `main` neste repositório é o que o cluster roda: o Argo CD lê o GitHub e aplica os charts e os manifestos.
 
 Três charts Helm cobrem o dia a dia — mídia, fotos e arquivos — e manifests crus cobrem o disco, o n8n, o Ingress do Argo CD e os operadores (Traefik, Tailscale, kube-prometheus-stack).
 
@@ -40,23 +40,23 @@ A GeForce 520 fica de fora. Sem NVENC útil para o Jellyfin e sem CUDA útil par
 
 ## Acesso
 
-O Traefik escuta na porta 80 do nó. O sslip.io resolve `*.192.168.0.42.sslip.io` para `192.168.0.42`, então a LAN não precisa de DNS local.
+O Traefik escuta na porta 80 do nó. O sslip.io resolve `*.192.168.0.47.sslip.io` para `192.168.0.47`, então a LAN não precisa de DNS local.
 
 | Serviço | LAN | Tailscale |
 |---|---|---|
-| Jellyfin | http://jellyfin.192.168.0.42.sslip.io | `jellyfin.<tailnet>.ts.net` |
-| Jellyseerr | http://seerr.192.168.0.42.sslip.io | `seerr.<tailnet>.ts.net` |
-| Radarr | http://radarr.192.168.0.42.sslip.io | — |
-| Sonarr | http://sonarr.192.168.0.42.sslip.io | — |
-| Prowlarr | http://prowlarr.192.168.0.42.sslip.io | — |
-| qBittorrent | http://qbit.192.168.0.42.sslip.io | — |
-| Immich | http://photos.192.168.0.42.sslip.io | `photos.<tailnet>.ts.net` |
-| Seafile | http://drive.192.168.0.42.sslip.io | https://drive.taileba3bd.ts.net |
-| n8n | http://n8n.192.168.0.42.sslip.io | https://n8n.taileba3bd.ts.net |
+| Jellyfin | http://jellyfin.192.168.0.47.sslip.io | `jellyfin.<tailnet>.ts.net` |
+| Jellyseerr | http://seerr.192.168.0.47.sslip.io | `seerr.<tailnet>.ts.net` |
+| Radarr | http://radarr.192.168.0.47.sslip.io | — |
+| Sonarr | http://sonarr.192.168.0.47.sslip.io | — |
+| Prowlarr | http://prowlarr.192.168.0.47.sslip.io | — |
+| qBittorrent | http://qbit.192.168.0.47.sslip.io | — |
+| Immich | http://photos.192.168.0.47.sslip.io | `photos.<tailnet>.ts.net` |
+| Seafile | http://drive.192.168.0.47.sslip.io | https://drive.taileba3bd.ts.net |
+| n8n | http://n8n.192.168.0.47.sslip.io | https://n8n.taileba3bd.ts.net |
 | Webhooks do n8n | caminhos `/webhook*` no Traefik | https://n8n-hooks.taileba3bd.ts.net (Funnel) |
-| Grafana | http://grafana.192.168.0.42.sslip.io | — |
-| Alertmanager | http://alertmanager.192.168.0.42.sslip.io | — |
-| Argo CD | http://argocd.192.168.0.42.sslip.io | `argocd.<tailnet>.ts.net` |
+| Grafana | http://grafana.192.168.0.47.sslip.io | — |
+| Alertmanager | http://alertmanager.192.168.0.47.sslip.io | — |
+| Argo CD | http://argocd.192.168.0.47.sslip.io | `argocd.<tailnet>.ts.net` |
 
 O tailnet é `taileba3bd.ts.net`. O editor do n8n e os links gerados pelo Seafile usam esse nome (`N8N_EDITOR_BASE_URL` e `server.publicHost`). A porta BitTorrent do qBittorrent é um NodePort (`6881`), para peers de fora do cluster.
 

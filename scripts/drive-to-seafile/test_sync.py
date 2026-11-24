@@ -210,7 +210,7 @@ class PlanTest(unittest.TestCase):
             "https://drive.taileba3bd.ts.net/seafhttp/upload-api/abc",
         )
         self.assertEqual(
-            normalize_upload_url('"http://192.168.0.42:8082/upload-api/abc"', server),
+            normalize_upload_url('"http://192.168.0.47:8082/upload-api/abc"', server),
             "https://drive.taileba3bd.ts.net/seafhttp/upload-api/abc",
         )
         self.assertEqual(

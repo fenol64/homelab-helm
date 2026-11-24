@@ -20,7 +20,7 @@ Google Drive (uma vez):
 
 Seafile, por variável de ambiente ou flag:
   SEAFILE_URL       padrão https://drive.taileba3bd.ts.net
-                    na LAN: http://drive.192.168.0.42.sslip.io
+                    na LAN: http://drive.192.168.0.47.sslip.io
   SEAFILE_USER      padrão admin@home.arpa
   SEAFILE_PASSWORD  senha atual. A do values-homelab.yaml só vale se
                     você não trocou depois do primeiro boot.
