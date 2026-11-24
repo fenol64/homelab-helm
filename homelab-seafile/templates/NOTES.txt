@@ -13,4 +13,7 @@ Login: {{ .Values.server.admin.email }}
 A senha está em server.admin.password (values-homelab.yaml na instalação do homelab).
 Ela só é aplicada na primeira subida. Troque depois pela interface do Seafile.
 
-SeaDoc, notificações e IA ficam desligados. Isto é só o drive.
+SeaDoc, notificações e IA ficam desligados. Isto é o drive.
+{{- if .Values.features.seafdav }}
+WebDAV: {{ include "homelab-seafile.publicOrigin" . }}/seafdav
+{{- end }}

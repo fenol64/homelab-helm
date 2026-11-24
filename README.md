@@ -1,8 +1,8 @@
 # Homelab
 
-GitOps de um nó Talos (`talos-o0s-vw5`, ~12 GiB de RAM, LAN `192.168.0.42`). O que está em `main` neste repositório é o que o cluster roda: o Argo CD lê o GitHub e aplica os charts e os manifestos.
+GitOps de um nó Talos (`talos-o0s-vw5`, ~12 GiB de RAM, LAN `192.168.0.47`). O que está em `main` neste repositório é o que o cluster roda: o Argo CD lê o GitHub e aplica os charts e os manifestos.
 
-Três charts Helm cobrem o dia a dia — mídia, fotos e arquivos — e manifests crus cobrem o disco, o n8n, o Ingress do Argo CD e os operadores (Traefik, Tailscale, kube-prometheus-stack).
+Três charts Helm cobrem o dia a dia — mídia, fotos e arquivos — e manifests crus cobrem o disco, o DNS, o n8n, o Ingress do Argo CD e os operadores (Traefik, Tailscale, kube-prometheus-stack).
 
 ## O que sobe
 
@@ -13,6 +13,7 @@ Três charts Helm cobrem o dia a dia — mídia, fotos e arquivos — e manifest
 | `drive` | `drive` | Seafile CE, MariaDB, Redis |
 | `disk` | `kube-system` | Monta as partições de fotos e arquivos do Seagate e cria os PVs |
 | `n8n` | `n8n`, `n8n-sandbox` | n8n, SearXNG e o sandbox de código da IA |
+| `dns` | `dns` | AdGuard Home, DNS da LAN na porta 53 do nó |
 | `monitoring` | `monitoring` | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) |
 | `traefik` | `traefik` | Ingress da LAN, `hostPort` 80 |
 | `tailscale` | `tailscale` | Tailscale Kubernetes Operator |
@@ -40,23 +41,25 @@ A GeForce 520 fica de fora. Sem NVENC útil para o Jellyfin e sem CUDA útil par
 
 ## Acesso
 
-O Traefik escuta na porta 80 do nó. O sslip.io resolve `*.192.168.0.42.sslip.io` para `192.168.0.42`, então a LAN não precisa de DNS local.
+O Traefik escuta na porta 80 do nó. O sslip.io resolve `*.192.168.0.47.sslip.io` para `192.168.0.47`, então a LAN não precisa de DNS local.
 
 | Serviço | LAN | Tailscale |
 |---|---|---|
-| Jellyfin | http://jellyfin.192.168.0.42.sslip.io | `jellyfin.<tailnet>.ts.net` |
-| Jellyseerr | http://seerr.192.168.0.42.sslip.io | `seerr.<tailnet>.ts.net` |
-| Radarr | http://radarr.192.168.0.42.sslip.io | — |
-| Sonarr | http://sonarr.192.168.0.42.sslip.io | — |
-| Prowlarr | http://prowlarr.192.168.0.42.sslip.io | — |
-| qBittorrent | http://qbit.192.168.0.42.sslip.io | — |
-| Immich | http://photos.192.168.0.42.sslip.io | `photos.<tailnet>.ts.net` |
-| Seafile | http://drive.192.168.0.42.sslip.io | https://drive.taileba3bd.ts.net |
-| n8n | http://n8n.192.168.0.42.sslip.io | https://n8n.taileba3bd.ts.net |
+| Jellyfin | http://jellyfin.192.168.0.47.sslip.io | `jellyfin.<tailnet>.ts.net` |
+| Jellyseerr | http://seerr.192.168.0.47.sslip.io | `seerr.<tailnet>.ts.net` |
+| Radarr | http://radarr.192.168.0.47.sslip.io | — |
+| Sonarr | http://sonarr.192.168.0.47.sslip.io | — |
+| Prowlarr | http://prowlarr.192.168.0.47.sslip.io | — |
+| qBittorrent | http://qbit.192.168.0.47.sslip.io | — |
+| Immich | http://photos.192.168.0.47.sslip.io | `photos.<tailnet>.ts.net` |
+| Seafile | http://drive.192.168.0.47.sslip.io | https://drive.taileba3bd.ts.net |
+| Seafile WebDAV | — | https://drive.taileba3bd.ts.net/seafdav |
+| n8n | http://n8n.192.168.0.47.sslip.io | https://n8n.taileba3bd.ts.net |
 | Webhooks do n8n | caminhos `/webhook*` no Traefik | https://n8n-hooks.taileba3bd.ts.net (Funnel) |
-| Grafana | http://grafana.192.168.0.42.sslip.io | — |
-| Alertmanager | http://alertmanager.192.168.0.42.sslip.io | — |
-| Argo CD | http://argocd.192.168.0.42.sslip.io | `argocd.<tailnet>.ts.net` |
+| Grafana | http://grafana.192.168.0.47.sslip.io | — |
+| Alertmanager | http://alertmanager.192.168.0.47.sslip.io | — |
+| Argo CD | http://argocd.192.168.0.47.sslip.io | `argocd.<tailnet>.ts.net` |
+| AdGuard Home | http://adguard.192.168.0.47.sslip.io | — |
 
 O tailnet é `taileba3bd.ts.net`. O editor do n8n e os links gerados pelo Seafile usam esse nome (`N8N_EDITOR_BASE_URL` e `server.publicHost`). A porta BitTorrent do qBittorrent é um NodePort (`6881`), para peers de fora do cluster.
 
@@ -154,6 +157,7 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   -f monitoring/values-homelab.yaml
 
 kubectl apply -f n8n/
+kubectl apply -f dns/
 ```
 
 O chart `monitoring` que o Argo instala é o `kube-prometheus-stack` `93.6.0`. O namespace `monitoring` precisa de Pod Security `privileged`, senão o node-exporter não sobe. O Prometheus roda como root: o operator monta o TSDB em `subPath`, o kubelet cria essa pasta como root e o `fsGroup` não vale para `subPath`.
@@ -192,9 +196,21 @@ Hosts internos, com a release `media`:
 
 **Immich.** No primeiro acesso a interface pede a conta de administrador. A senha do Postgres não é essa senha. `database.password` só entra quando o PVC do banco é criado; mudar o values depois não rotaciona o Postgres.
 
-**Seafile.** Login `admin@home.arpa`. A senha é `server.admin.password` em `homelab-seafile/values-homelab.yaml` e só é aplicada na primeira subida. Troque depois pela interface. SeaDoc, WebDAV, notificações, metadata e IA ficam desligados: o chart sobe o drive.
+**Seafile.** Login `admin@home.arpa`. A senha é `server.admin.password` em `homelab-seafile/values-homelab.yaml` e só é aplicada na primeira subida. Troque depois pela interface. SeaDoc, notificações, metadata e IA ficam desligados. O WebDAV fica ligado (`features.seafdav`) para o cofre.
+
+**Cofre.** O gerenciador de senha é um KeePass dentro do Seafile, na biblioteca `Cofre` (sem criptografia do Seafile: o `.kdbx` já é cifrado). O cliente Seafile sincroniza essa biblioteca numa pasta local. O KeePassXC abre `vault.kdbx` aí e a extensão KeePassXC-Browser preenche o login no navegador. A senha mestra não entra no Git nem no Seafile.
+
+No celular, KeePassDX (Android) ou KeePassium (iOS) abrem o mesmo arquivo por WebDAV: `https://drive.taileba3bd.ts.net/seafdav/Cofre/vault.kdbx`, com o usuário do Seafile. Use esse endereço HTTPS. O host da LAN é HTTP e o WebDAV manda a senha da conta em claro.
+
+O salvamento padrão do KeePassXC grava um arquivo temporário e depois substitui o cofre. Não edite o mesmo arquivo em dois aparelhos ao mesmo tempo. Se o Seafile criar `vault (SFConflict).kdbx`, faça Database → Merge from database no KeePassXC e apague o conflito. O histórico de versões da biblioteca é o backup do cofre.
+
+O WebDAV só passa a responder depois que esta mudança estiver em `main` e o Argo sincronizar o chart `drive`.
 
 **n8n.** Os Secrets não estão no Git e precisam existir antes do sync: `n8n-secrets` (`N8N_ENCRYPTION_KEY`, `N8N_SANDBOX_SERVICE_API_KEY`), `searxng-secrets` (`SEARXNG_SECRET`) e `n8n-sandbox-secrets` (`API_KEY`, `REGISTRATION_TOKEN`, `RUNNER_KEY`). O SearXNG serve a busca do assistente (JSON ligado no ConfigMap). O sandbox roda no namespace `n8n-sandbox`, com Pod Security `privileged`, porque o runner é Docker-in-Docker. NetworkPolicy deixa o n8n falar só com a API do sandbox, e o SearXNG só aceita tráfego do n8n.
+
+**AdGuard Home.** Login `admin`, senha de primeiro boot `db712333108736e96f4b9cf9`. O hash fica no ConfigMap e o init só copia o YAML quando o PVC está vazio, então mudar o Git depois não troca a senha. Troque em Configurações no primeiro login. O DHCP do roteador continua no roteador; o DNS que ele entrega aos aparelhos é `192.168.0.47`. Não abra a porta 53 para a internet. Upstream é `1.1.1.1` e `9.9.9.9`, para o roteador poder apontar para o nó sem laço.
+
+Para valer na rede: no DHCP da LAN, DNS `192.168.0.47` (se couber um segundo, deixe vazio). Desligue o DNS IPv6 do provedor, senão o celular resolve por fora. Reconecte o Wi-Fi. `dig @192.168.0.47 doubleclick.net` responde `0.0.0.0`. `dig @192.168.0.47 jellyfin.192.168.0.47.sslip.io` continua em `192.168.0.47`. Chrome e Firefox com DNS seguro, e Android com DNS privado, ignoram esse bloqueio. Anúncio servido pelo próprio domínio (YouTube) também passa.
 
 O client OAuth do Tailscale Operator não está no Git: em `argocd/apps/tailscale.yaml` os campos ficam vazios. A senha de admin do Grafana também fica de fora do diff do Argo (`ignoreDifferences` no Secret `kube-prometheus-stack-grafana`), para o render do Helm não rotacionar a senha a cada sync.
 
@@ -219,6 +235,7 @@ Requests cabem no nó. A soma dos limits passa de 12 GiB: um pico junto de Jelly
 | Sandbox runner | 512 Mi | 2 Gi |
 | Prometheus | 256 Mi | 1 Gi |
 | Grafana | 128 Mi | 384 Mi |
+| AdGuard Home | 128 Mi | 512 Mi |
 
 Idle da stack de mídia fica em torno de 2–3 GiB.
 
@@ -236,6 +253,7 @@ homelab-seafile/         chart do Seafile
 homelab-disk/volumes.yaml
 monitoring/values-homelab.yaml
 n8n/                     n8n, SearXNG, sandbox e Funnel dos webhooks
+dns/                     AdGuard Home, DNS da LAN no hostPort 53
 ```
 
 Cada chart tem `values.yaml` (default) e `values-homelab.yaml` (este nó). Fuso de tudo que o chart controla: `America/Sao_Paulo`. UID/GID dos containers linuxserver: `1000`.

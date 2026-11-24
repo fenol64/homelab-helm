@@ -1,0 +1,371 @@
+# Configuração inicial. O init só copia isto quando o PVC ainda não tem
+# AdGuardHome.yaml. Mudança daqui não altera uma instalação que já subiu:
+# a interface grava o YAML de volta no volume.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adguard-seed
+  namespace: dns
+  labels:
+    app.kubernetes.io/name: adguard
+    app.kubernetes.io/part-of: homelab
+data:
+  AdGuardHome.yaml: |
+    http:
+      pprof:
+        port: 6060
+        enabled: false
+      address: "0.0.0.0:3000"
+      session_ttl: 720h
+      doh:
+        insecure_enabled: false
+        routes:
+          - "GET /dns-query"
+          - "POST /dns-query"
+          - "GET /dns-query/{ClientID}"
+          - "POST /dns-query/{ClientID}"
+    users:
+      - name: admin
+        password: $2b$10$eWX3iTU0.DqzbAEpMM.Nv.8.M55CZ9MMs7zJ3Z3nhUgPcDObha4cC
+    auth_attempts: 5
+    block_auth_min: 15
+    http_proxy: ""
+    language: pt-br
+    theme: auto
+    dns:
+      bind_hosts:
+        - 0.0.0.0
+      port: 53
+      anonymize_client_ip: false
+      ratelimit: 50
+      ratelimit_subnet_len_ipv4: 24
+      ratelimit_subnet_len_ipv6: 56
+      ratelimit_whitelist: []
+      refuse_any: true
+      # IPs, não o roteador. O DHCP da LAN aponta para cá; usar o roteador
+      # como upstream fecha um laço.
+      upstream_dns:
+        - 1.1.1.1
+        - 9.9.9.9
+      upstream_dns_file: ""
+      bootstrap_dns:
+        - 1.1.1.1
+        - 9.9.9.9
+      fallback_dns:
+        - 1.1.1.1
+        - 9.9.9.9
+      upstream_mode: load_balance
+      fastest_timeout: 1s
+      allowed_clients:
+        - 192.168.0.0/24
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 100.64.0.0/10
+      disallowed_clients: []
+      blocked_hosts:
+        - version.bind
+        - id.server
+        - hostname.bind
+      trusted_proxies:
+        - 127.0.0.0/8
+        - ::1/128
+      cache_enabled: true
+      cache_size: 4194304
+      cache_ttl_min: 0
+      cache_ttl_max: 0
+      cache_optimistic: true
+      cache_optimistic_answer_ttl: 30s
+      cache_optimistic_max_age: 12h
+      bogus_nxdomain: []
+      aaaa_disabled: false
+      enable_dnssec: false
+      edns_client_subnet:
+        custom_ip: ""
+        enabled: false
+        use_custom: false
+      max_goroutines: 300
+      handle_ddr: true
+      ipset: []
+      ipset_file: ""
+      bootstrap_prefer_ipv6: false
+      upstream_timeout: 10s
+      private_networks: []
+      use_private_ptr_resolvers: true
+      local_ptr_upstreams: []
+      use_dns64: false
+      dns64_prefixes: []
+      serve_http3: false
+      use_http3_upstreams: false
+      serve_plain_dns: true
+      hostsfile_enabled: true
+    tls:
+      enabled: false
+      server_name: ""
+      force_https: false
+      port_https: 443
+      port_dns_over_tls: 853
+      port_dns_over_quic: 853
+      port_dnscrypt: 0
+      dnscrypt_config_file: ""
+      certificate_chain: ""
+      private_key: ""
+      certificate_path: ""
+      private_key_path: ""
+      strict_sni_check: false
+    querylog:
+      dir_path: ""
+      ignored: []
+      ignored_enabled: false
+      interval: 168h
+      size_memory: 1000
+      enabled: true
+      file_enabled: true
+    statistics:
+      dir_path: ""
+      ignored: []
+      ignored_enabled: false
+      interval: 168h
+      enabled: true
+    filters:
+      - enabled: true
+        url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt
+        name: AdGuard DNS filter
+        id: 1
+      - enabled: true
+        url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_2.txt
+        name: AdAway Default Blocklist
+        id: 2
+    whitelist_filters: []
+    user_rules: []
+    dhcp:
+      enabled: false
+      interface_name: ""
+      local_domain_name: lan
+      dhcpv4:
+        gateway_ip: ""
+        subnet_mask: ""
+        range_start: ""
+        range_end: ""
+        lease_duration: 86400
+        icmp_timeout_msec: 1000
+        options: []
+      dhcpv6:
+        range_start: ""
+        lease_duration: 86400
+        ra_slaac_only: false
+        ra_allow_slaac: false
+    filtering:
+      blocking_ipv4: ""
+      blocking_ipv6: ""
+      blocked_services:
+        schedule:
+          time_zone: America/Sao_Paulo
+        ids: []
+      protection_disabled_until: null
+      parental_enabled: false
+      safe_search:
+        enabled: false
+        bing: true
+        duckduckgo: true
+        ecosia: true
+        google: true
+        pixabay: true
+        yandex: true
+        youtube: true
+      blocking_mode: default
+      parental_block_host: family-block.dns.adguard.com
+      safebrowsing_block_host: standard-block.dns.adguard.com
+      rewrites_enabled: true
+      rewrites: []
+      safe_fs_patterns:
+        - /opt/adguardhome/work/userfilters/*
+      safebrowsing_cache_size: 1048576
+      safesearch_cache_size: 1048576
+      parental_cache_size: 1048576
+      cache_time: 30
+      filters_update_interval: 24
+      blocked_response_ttl: 10
+      filtering_enabled: true
+      safebrowsing_enabled: false
+      protection_enabled: true
+    clients:
+      runtime_sources:
+        whois: true
+        arp: true
+        rdns: true
+        dhcp: true
+        hosts: true
+      persistent: []
+    log:
+      enabled: true
+      file: ""
+      max_backups: 0
+      max_size: 100
+      max_age: 3
+      compress: false
+      local_time: false
+      verbose: false
+    os:
+      group: ""
+      user: ""
+      rlimit_nofile: 0
+    schema_version: 34
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: adguard-data
+  namespace: dns
+  labels:
+    app.kubernetes.io/name: adguard
+    app.kubernetes.io/part-of: homelab
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adguard
+  namespace: dns
+  labels:
+    app.kubernetes.io/name: adguard
+    app.kubernetes.io/part-of: homelab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: adguard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: adguard
+        app.kubernetes.io/part-of: homelab
+    spec:
+      # O pod resolve upstream e as listas pelo CoreDNS. Não aponta para si.
+      dnsPolicy: ClusterFirst
+      initContainers:
+        - name: seed-config
+          image: busybox:1.37.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              if [ ! -s /conf/AdGuardHome.yaml ]; then
+                cp /seed/AdGuardHome.yaml /conf/AdGuardHome.yaml
+              fi
+          volumeMounts:
+            - name: data
+              mountPath: /conf
+              subPath: conf
+            - name: seed
+              mountPath: /seed
+              readOnly: true
+      containers:
+        - name: adguard
+          image: docker.io/adguard/adguardhome:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: dns-udp
+              containerPort: 53
+              protocol: UDP
+              hostPort: 53
+            - name: dns-tcp
+              containerPort: 53
+              protocol: TCP
+              hostPort: 53
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /opt/adguardhome/conf
+              subPath: conf
+            - name: data
+              mountPath: /opt/adguardhome/work
+              subPath: work
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: adguard-data
+        - name: seed
+          configMap:
+            name: adguard-seed
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: adguard
+  namespace: dns
+  labels:
+    app.kubernetes.io/name: adguard
+    app.kubernetes.io/part-of: homelab
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: adguard
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      protocol: TCP
+    - name: dns-udp
+      port: 53
+      targetPort: dns-udp
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: dns-tcp
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: adguard
+  namespace: dns
+  labels:
+    app.kubernetes.io/name: adguard
+    app.kubernetes.io/part-of: homelab
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: adguard.192.168.0.47.sslip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: adguard
+                port:
+                  name: http

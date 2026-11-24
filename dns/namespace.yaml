@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dns
+  labels:
+    app.kubernetes.io/part-of: homelab
+    # hostPort 53 e o processo root da imagem cabem no baseline.
+    pod-security.kubernetes.io/enforce: baseline

@@ -12,12 +12,12 @@ grafana:
   defaultDashboardsTimezone: America/Sao_Paulo
   grafana.ini:
     server:
-      root_url: http://grafana.192.168.0.42.sslip.io
+      root_url: http://grafana.192.168.0.47.sslip.io
   ingress:
     enabled: true
     ingressClassName: traefik
     hosts:
-      - grafana.192.168.0.42.sslip.io
+      - grafana.192.168.0.47.sslip.io
     path: /
     pathType: Prefix
   persistence:
@@ -35,7 +35,7 @@ alertmanager:
   alertmanagerSpec:
     replicas: 1
     retention: 120h
-    externalUrl: http://alertmanager.192.168.0.42.sslip.io
+    externalUrl: http://alertmanager.192.168.0.47.sslip.io
     podAntiAffinity: ""
     resources:
       requests:
@@ -55,7 +55,7 @@ alertmanager:
     enabled: true
     ingressClassName: traefik
     hosts:
-      - alertmanager.192.168.0.42.sslip.io
+      - alertmanager.192.168.0.47.sslip.io
     paths:
       - /
     pathType: Prefix

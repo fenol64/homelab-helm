@@ -29,7 +29,7 @@ server:
     limits:
       memory: 2Gi
   ingress:
-    host: drive.192.168.0.42.sslip.io
+    host: drive.192.168.0.47.sslip.io
   tailscale:
     enabled: true
     hostname: drive
@@ -43,6 +43,11 @@ redis:
 
 auth:
   jwtPrivateKey: 9bb0d6b4df8a3bc2d4e999eca40039a57d0618ef4d1a14c4
+
+# WebDAV para o KeePass do celular abrir o cofre em /seafdav.
+# A biblioteca Cofre fica sem criptografia do Seafile: o .kdbx já é cifrado.
+features:
+  seafdav: true
 
 ingress:
   enabled: true
