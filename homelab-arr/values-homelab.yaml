@@ -9,14 +9,18 @@ namespace:
 timezone: America/Sao_Paulo
 
 storage:
-  # local-path não impõe cota: o tamanho é o teto prático no disco do nó.
+  # Configs ficam no SSD. Biblioteca e downloads usam o PV movies-400g
+  # (/var/mnt/movies no Seagate). local-path não impõe cota.
   storageClassName: local-path
   media:
     enabled: true
     size: 120Gi
+    existingClaim: movies-400g
   downloads:
     enabled: true
     size: 40Gi
+    existingClaim: movies-400g
+    subPath: downloads
 
 # Traefik (IngressClass traefik) publicado na porta 80 do nó.
 # sslip.io resolve <nome>.192.168.0.42.sslip.io para 192.168.0.42, sem DNS local.

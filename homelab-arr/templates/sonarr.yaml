@@ -40,6 +40,7 @@ spec:
     spec:
       securityContext:
         fsGroup: {{ .Values.pgid }}
+        fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: sonarr
           image: "{{ $app.image.repository }}:{{ $app.image.tag }}"
@@ -57,6 +58,9 @@ spec:
               mountPath: /media
             - name: downloads
               mountPath: /downloads
+              {{- with .Values.storage.downloads.subPath }}
+              subPath: {{ . | quote }}
+              {{- end }}
           resources:
             {{- toYaml $app.resources | nindent 12 }}
           livenessProbe:

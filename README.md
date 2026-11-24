@@ -76,7 +76,7 @@ Seagate `ST1000LM048-2E71`, três partições XFS. O DaemonSet `photos-files-dis
 
 | Partição | Tamanho | Onde | Quem usa |
 |---|---|---|---|
-| `movies` (`sdb1`) | 400 Gi | DaemonSet `movies-disk`, fora deste repo | a biblioteca de filmes no disco; o chart ARR hoje não aponta para ela |
+| `movies` (`sdb1`) | 400 Gi | DaemonSet `movies-disk`, fora deste repo; PV `movies-400g` | biblioteca (`/media`) e downloads (`/downloads`, subPath `downloads`) do Jellyfin, Radarr, Sonarr e qBittorrent |
 | `photos` (`sdb2`) | 280 Gi | `/var/mnt/photos` → PV `photos-library` (`Retain`, StorageClass `movies-hdd`) | biblioteca do Immich (`existingClaim: photos-library`) |
 | `files` (`sdb3`) | 220 Gi | `/var/mnt/files` → PV `files-data` (`Retain`, StorageClass `movies-hdd`) | dados do Seafile (`existingClaim: files-data`) |
 
@@ -245,5 +245,5 @@ Cada chart tem `values.yaml` (default) e `values-homelab.yaml` (este nó). Fuso 
 - Sem sidecar de VPN no qBittorrent.
 - Sem Bazarr nem Lidarr. Cada app do chart ARR tem `enabled` e dá para acrescentar outro no mesmo molde.
 - Sem aceleração de hardware na GeForce 520.
-- A partição `movies` de 400 Gi é montada por um DaemonSet que não está neste repositório. O PVC de mídia do chart usa `local-path` no SSD (120 Gi).
+- A partição `movies` de 400 Gi é montada por um DaemonSet que não está neste repositório. O chart usa o PV `movies-400g` que aponta para ela. Configs dos apps continuam em `local-path` no SSD.
 - Senhas de primeiro boot do Immich e do Seafile estão nos `values-homelab.yaml` commitados. Elas não rotacionam o que já subiu.
