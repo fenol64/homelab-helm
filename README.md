@@ -235,7 +235,7 @@ Requests cabem no nó. A soma dos limits passa de 12 GiB: um pico junto de Jelly
 | Sandbox runner | 512 Mi | 2 Gi |
 | Prometheus | 256 Mi | 1 Gi |
 | Grafana | 128 Mi | 384 Mi |
-| AdGuard Home | 128 Mi | 512 Mi |
+| AdGuard Home | 128 Mi | 1 Gi |
 
 Idle da stack de mídia fica em torno de 2–3 GiB.
 
